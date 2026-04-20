@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
 
-export function middleware(request: NextRequest) {
+export function proxy(request: NextRequest) {
   const isLoginPage = request.nextUrl.pathname === '/login'
   const token = request.cookies.get('ttcs_token')?.value
 

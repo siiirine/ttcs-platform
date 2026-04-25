@@ -3,156 +3,116 @@
 import { useState } from 'react'
 import { DashboardLayout } from '@/components/dashboard/dashboard-layout'
 import { Topbar } from '@/components/dashboard/topbar'
-import { ExternalLink, AlertCircle, RefreshCw, BarChart3, Activity, Cpu } from 'lucide-react'
+import { ExternalLink, RefreshCw, AlertCircle } from 'lucide-react'
 
 const GRAFANA_URL = 'http://192.168.147.129:3000'
 
 export default function MonitoringPage() {
   const [iframeError, setIframeError] = useState(false)
   const [isLoading, setIsLoading] = useState(true)
-
-  const handleIframeLoad = () => {
-    setIsLoading(false)
-  }
-
-  const handleIframeError = () => {
-    setIsLoading(false)
-    setIframeError(true)
-  }
-
-  const openGrafana = () => {
-    window.open(GRAFANA_URL, '_blank')
-  }
-
-  const retryLoad = () => {
-    setIsLoading(true)
-    setIframeError(false)
-  }
+  const [key, setKey] = useState(0)
 
   return (
     <DashboardLayout>
       <Topbar />
-      
-      <div className="p-6 h-[calc(100vh-64px)] flex flex-col">
-        {/* Header */}
-        <div className="flex items-center justify-between mb-4">
-          <div>
-            <h2 className="text-2xl font-heading font-bold text-foreground">Monitoring Grafana</h2>
-            <p className="text-muted-foreground mt-1">
-              Tableaux de bord Prometheus et métriques système en temps réel
-            </p>
-          </div>
-          <button
-            onClick={openGrafana}
-            className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-gradient-to-r from-primary to-accent text-white font-semibold hover:opacity-90 transition-all shadow-lg shadow-primary/25"
-          >
-            <ExternalLink className="h-4 w-4" />
-            Ouvrir Grafana
-          </button>
-        </div>
 
-        {/* Quick Stats Bar */}
-        <div className="glass-card gradient-border rounded-xl p-4 mb-4">
-          <div className="flex items-center gap-8">
-            <div className="flex items-center gap-3">
-              <div className="p-2.5 rounded-lg bg-primary/20">
-                <BarChart3 className="h-5 w-5 text-primary" />
-              </div>
-              <div>
-                <p className="text-xs text-muted-foreground">Source</p>
-                <p className="font-semibold text-foreground">Prometheus</p>
-              </div>
-            </div>
-            <div className="h-8 w-px bg-border/50" />
-            <div className="flex items-center gap-3">
-              <div className="p-2.5 rounded-lg bg-accent/20">
-                <Activity className="h-5 w-5 text-accent" />
-              </div>
-              <div>
-                <p className="text-xs text-muted-foreground">Métriques</p>
-                <p className="font-semibold text-foreground">Temps réel</p>
-              </div>
-            </div>
-            <div className="h-8 w-px bg-border/50" />
-            <div className="flex items-center gap-3">
-              <div className="p-2.5 rounded-lg bg-[#a855f7]/20">
-                <Cpu className="h-5 w-5 text-[#a855f7]" />
-              </div>
-              <div>
-                <p className="text-xs text-muted-foreground">Endpoint</p>
-                <code className="font-mono text-sm text-foreground">{GRAFANA_URL}</code>
-              </div>
-            </div>
+      <div style={{ height: 'calc(100vh - 64px)', display: 'flex', flexDirection: 'column' }}>
+
+        {/* Barre fine en haut */}
+        <div style={{
+          display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+          padding: '10px 24px',
+          borderBottom: '1px solid rgba(0,130,240,0.1)',
+          background: 'rgba(255,255,255,0.8)',
+          flexShrink: 0,
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+            <div style={{ width: '7px', height: '7px', borderRadius: '50%', background: '#10b981', boxShadow: '0 0 5px #10b981' }} />
+            <span style={{ fontSize: '13px', fontWeight: 600, color: '#0a1628' }}>Monitoring Grafana</span>
+            <span style={{ fontSize: '12px', color: '#7a9bc5' }}>— Prometheus · Temps réel</span>
+            <code style={{ fontSize: '11px', color: '#4a6a8a', fontFamily: 'monospace', background: 'rgba(0,130,240,0.06)', padding: '2px 8px', borderRadius: '4px' }}>
+              {GRAFANA_URL}
+            </code>
+          </div>
+          <div style={{ display: 'flex', gap: '8px' }}>
+            <button onClick={() => { setIsLoading(true); setIframeError(false); setKey(k => k + 1) }} style={{
+              display: 'flex', alignItems: 'center', gap: '6px',
+              padding: '6px 14px', borderRadius: '8px',
+              border: '1px solid rgba(0,130,240,0.2)',
+              background: 'rgba(0,130,240,0.05)',
+              color: '#0082f0', fontSize: '12px', fontWeight: 500, cursor: 'pointer',
+            }}>
+              <RefreshCw size={13} /> Actualiser
+            </button>
+            <button onClick={() => window.open(GRAFANA_URL, '_blank')} style={{
+              display: 'flex', alignItems: 'center', gap: '6px',
+              padding: '6px 14px', borderRadius: '8px',
+              border: 'none',
+              background: 'linear-gradient(135deg,#0055cc,#0082f0)',
+              color: 'white', fontSize: '12px', fontWeight: 500, cursor: 'pointer',
+            }}>
+              <ExternalLink size={13} /> Ouvrir Grafana
+            </button>
           </div>
         </div>
 
-        {/* Iframe Container */}
-        <div className="flex-1 rounded-xl glass-card gradient-border overflow-hidden relative">
+        {/* Iframe plein écran */}
+        <div style={{ flex: 1, position: 'relative', overflow: 'hidden' }}>
+
           {isLoading && !iframeError && (
-            <div className="absolute inset-0 flex items-center justify-center glass-card z-10">
-              <div className="flex flex-col items-center gap-4">
-                <div className="relative w-16 h-16">
-                  <div className="absolute inset-0 rounded-full border-4 border-primary/20" />
-                  <div className="absolute inset-0 rounded-full border-4 border-primary border-t-transparent animate-spin" />
-                </div>
-                <p className="text-muted-foreground">Chargement de Grafana...</p>
-              </div>
+            <div style={{
+              position: 'absolute', inset: 0, zIndex: 10,
+              display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+              background: 'rgba(248,250,252,0.9)',
+              gap: '16px',
+            }}>
+              <div style={{ width: '40px', height: '40px', borderRadius: '50%', border: '3px solid rgba(0,130,240,0.15)', borderTopColor: '#0082f0', animation: 'spin 0.8s linear infinite' }} />
+              <p style={{ fontSize: '13px', color: '#4a6a8a' }}>Chargement de Grafana...</p>
             </div>
           )}
 
           {iframeError ? (
-            <div className="h-full flex items-center justify-center">
-              <div className="flex flex-col items-center gap-4 text-center max-w-md">
-                <div className="p-4 rounded-full bg-[#ffb020]/20">
-                  <AlertCircle className="h-8 w-8 text-[#ffb020]" />
-                </div>
-                <h3 className="text-xl font-heading font-bold text-foreground">Grafana non accessible</h3>
-                <p className="text-muted-foreground">
-                  Le serveur Grafana n&apos;est pas accessible à l&apos;adresse
-                </p>
-                <code className="px-4 py-2 rounded-xl glass-card border border-primary/30 text-primary font-mono text-sm">{GRAFANA_URL}</code>
-                <p className="text-sm text-muted-foreground">
-                  Vérifiez que Grafana est démarré et accessible sur le réseau local.
-                </p>
-                <div className="flex items-center gap-3 mt-2">
-                  <button
-                    onClick={retryLoad}
-                    className="flex items-center gap-2 px-5 py-2.5 rounded-xl glass-card border border-border/50 text-foreground font-medium hover:border-primary/50 transition-all"
-                  >
-                    <RefreshCw className="h-4 w-4" />
-                    Réessayer
-                  </button>
-                  <button
-                    onClick={openGrafana}
-                    className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-gradient-to-r from-primary to-accent text-white font-semibold hover:opacity-90 transition-all shadow-lg shadow-primary/25"
-                  >
-                    <ExternalLink className="h-4 w-4" />
-                    Ouvrir dans un nouvel onglet
-                  </button>
-                </div>
+            <div style={{ height: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '16px' }}>
+              <div style={{ padding: '16px', borderRadius: '50%', background: 'rgba(245,158,11,0.1)' }}>
+                <AlertCircle size={32} style={{ color: '#f59e0b' }} />
+              </div>
+              <div style={{ textAlign: 'center' }}>
+                <h3 style={{ fontSize: '16px', fontWeight: 700, color: '#0a1628', marginBottom: '8px' }}>Grafana non accessible</h3>
+                <p style={{ fontSize: '13px', color: '#4a6a8a', marginBottom: '4px' }}>Vérifiez que Grafana est démarré sur VM2</p>
+                <code style={{ fontSize: '12px', color: '#0082f0', fontFamily: 'monospace' }}>{GRAFANA_URL}</code>
+              </div>
+              <div style={{ display: 'flex', gap: '8px' }}>
+                <button onClick={() => { setIsLoading(true); setIframeError(false); setKey(k => k + 1) }} style={{
+                  display: 'flex', alignItems: 'center', gap: '6px', padding: '8px 16px', borderRadius: '8px',
+                  border: '1px solid rgba(0,130,240,0.2)', background: 'rgba(0,130,240,0.05)',
+                  color: '#0082f0', fontSize: '13px', cursor: 'pointer',
+                }}>
+                  <RefreshCw size={14} /> Réessayer
+                </button>
+                <button onClick={() => window.open(GRAFANA_URL, '_blank')} style={{
+                  display: 'flex', alignItems: 'center', gap: '6px', padding: '8px 16px', borderRadius: '8px',
+                  border: 'none', background: 'linear-gradient(135deg,#0055cc,#0082f0)',
+                  color: 'white', fontSize: '13px', cursor: 'pointer',
+                }}>
+                  <ExternalLink size={14} /> Ouvrir dans un onglet
+                </button>
               </div>
             </div>
           ) : (
             <iframe
-              key={isLoading ? 'loading' : 'loaded'}
+              key={key}
               src={GRAFANA_URL}
-              className="w-full h-full border-0"
+              style={{ width: '100%', height: '100%', border: 'none' }}
               title="Grafana Dashboard"
-              onLoad={handleIframeLoad}
-              onError={handleIframeError}
+              onLoad={() => setIsLoading(false)}
+              onError={() => { setIsLoading(false); setIframeError(true) }}
               sandbox="allow-same-origin allow-scripts allow-popups allow-forms"
             />
           )}
         </div>
-
-        {/* Info Footer */}
-        <div className="mt-4 p-5 rounded-xl glass-card border border-primary/20">
-          <p className="text-sm text-muted-foreground">
-            <strong className="text-primary">Note:</strong> L&apos;intégration Grafana nécessite que le serveur soit accessible sur le même réseau. 
-            Les métriques Prometheus sont collectées depuis les exporters configurés sur chaque noeud du système Ericsson.
-          </p>
-        </div>
       </div>
+
+      <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
     </DashboardLayout>
   )
 }

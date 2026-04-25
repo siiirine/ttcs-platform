@@ -11,6 +11,7 @@ export default function LoginPage() {
   const [error, setError] = useState('')
   const [isLoading, setIsLoading] = useState(false)
   const [mounted, setMounted] = useState(false)
+  const [flipped] = useState(true)
   const router = useRouter()
 
   useEffect(() => { setMounted(true) }, [])
@@ -30,7 +31,7 @@ export default function LoginPage() {
         body: JSON.stringify(body),
       })
       const data = await res.json()
-      if (!res.ok) { setError(data.detail || 'Erreur'); return }
+      if (!res.ok) { setError(data.detail || 'Erreur de connexion'); return }
       document.cookie = `ttcs_token=${data.access_token}; path=/; max-age=86400`
       document.cookie = `ttcs_user=${encodeURIComponent(JSON.stringify(data.user))}; path=/; max-age=86400`
       router.push('/')
@@ -41,395 +42,220 @@ export default function LoginPage() {
     }
   }
 
+  const inputStyle: React.CSSProperties = {
+    width: '100%', padding: '13px 16px',
+    background: 'rgba(255,255,255,0.06)',
+    border: '1px solid rgba(255,255,255,0.12)',
+    borderRadius: '10px',
+    color: 'white', fontSize: '14px',
+    outline: 'none', boxSizing: 'border-box',
+    fontFamily: 'inherit', transition: 'all 0.2s',
+  }
+
+  const labelStyle: React.CSSProperties = {
+    display: 'block', fontSize: '11px', fontWeight: 600,
+    color: 'rgba(193,232,255,0.5)',
+    textTransform: 'uppercase',
+    letterSpacing: '0.09em', marginBottom: '8px',
+  }
+
+  const PanelForm = (
+    <div style={{
+      background: 'rgba(0,29,57,0.95)',
+      backdropFilter: 'blur(24px)',
+      padding: '44px',
+      display: 'flex', flexDirection: 'column', justifyContent: 'center',
+      height: '100%', boxSizing: 'border-box',
+    }}>
+      <div style={{ fontSize: '1.6rem', fontWeight: 700, color: 'white', letterSpacing: '-0.02em', marginBottom: '4px' }}>
+        {isLogin ? 'Bienvenue' : 'Créer un compte'}
+      </div>
+      <div style={{ fontSize: '12px', color: 'rgba(193,232,255,0.35)', marginBottom: '28px' }}>
+        {isLogin ? 'Connectez-vous à votre espace de supervision.' : 'Créez votre accès à la plateforme TTCS.'}
+      </div>
+
+      <div style={{ display: 'flex', borderBottom: '1px solid rgba(193,232,255,0.08)', marginBottom: '24px' }}>
+        {['Connexion', 'Nouveau compte'].map((tab, i) => (
+          <button key={tab} onClick={() => { setIsLogin(i === 0); setError('') }} style={{
+            padding: '9px 18px', fontSize: '12px', fontWeight: 500,
+            color: isLogin === (i === 0) ? 'white' : 'rgba(193,232,255,0.3)',
+            background: 'transparent', border: 'none',
+            borderBottom: isLogin === (i === 0) ? '2px solid #7BBDE8' : '2px solid transparent',
+            marginBottom: '-1px', cursor: 'pointer',
+            transition: 'all 0.2s', fontFamily: 'inherit',
+          }}>{tab}</button>
+        ))}
+      </div>
+
+      <form onSubmit={handleSubmit}>
+        {!isLogin && (
+          <div style={{ marginBottom: '16px' }}>
+            <label style={labelStyle}>Nom complet</label>
+            <input type="text" value={fullName} onChange={e => setFullName(e.target.value)}
+              placeholder="Ahmed Ben Ali" required={!isLogin} style={inputStyle}
+              onFocus={e => { e.target.style.borderColor = 'rgba(123,189,232,0.5)'; e.target.style.background = 'rgba(74,118,159,0.1)'; e.target.style.boxShadow = '0 0 0 3px rgba(74,118,159,0.08)' }}
+              onBlur={e => { e.target.style.borderColor = 'rgba(255,255,255,0.12)'; e.target.style.background = 'rgba(255,255,255,0.06)'; e.target.style.boxShadow = 'none' }}
+            />
+          </div>
+        )}
+        <div style={{ marginBottom: '16px' }}>
+          <label style={labelStyle}>Nom d&apos;utilisateur</label>
+          <input type="text" value={username} onChange={e => setUsername(e.target.value)}
+            placeholder="admin" required style={inputStyle}
+            onFocus={e => { e.target.style.borderColor = 'rgba(123,189,232,0.5)'; e.target.style.background = 'rgba(74,118,159,0.1)'; e.target.style.boxShadow = '0 0 0 3px rgba(74,118,159,0.08)' }}
+            onBlur={e => { e.target.style.borderColor = 'rgba(255,255,255,0.12)'; e.target.style.background = 'rgba(255,255,255,0.06)'; e.target.style.boxShadow = 'none' }}
+          />
+        </div>
+        <div style={{ marginBottom: '22px' }}>
+          <label style={labelStyle}>Mot de passe</label>
+          <input type="password" value={password} onChange={e => setPassword(e.target.value)}
+            placeholder="••••••••" required style={inputStyle}
+            onFocus={e => { e.target.style.borderColor = 'rgba(123,189,232,0.5)'; e.target.style.background = 'rgba(74,118,159,0.1)'; e.target.style.boxShadow = '0 0 0 3px rgba(74,118,159,0.08)' }}
+            onBlur={e => { e.target.style.borderColor = 'rgba(255,255,255,0.12)'; e.target.style.background = 'rgba(255,255,255,0.06)'; e.target.style.boxShadow = 'none' }}
+          />
+        </div>
+
+        {error && (
+          <div style={{ background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.2)', borderRadius: '8px', padding: '10px 14px', color: '#fca5a5', fontSize: '12px', marginBottom: '16px' }}>
+            {error}
+          </div>
+        )}
+
+        <button type="submit" disabled={isLoading} style={{
+          width: '100%', padding: '13px', borderRadius: '10px',
+          background: isLoading ? 'rgba(74,118,159,0.3)' : 'linear-gradient(135deg,#0A4174,#49769F)',
+          color: 'white', fontSize: '14px', fontWeight: 600,
+          cursor: isLoading ? 'not-allowed' : 'pointer',
+          fontFamily: 'inherit', letterSpacing: '0.01em',
+          border: '1px solid rgba(123,189,232,0.2)',
+          boxShadow: isLoading ? 'none' : '0 4px 20px rgba(0,29,57,0.5)',
+          transition: 'all 0.2s',
+        }}
+          onMouseEnter={e => { if (!isLoading) { (e.currentTarget as HTMLElement).style.transform = 'translateY(-1px)'; (e.currentTarget as HTMLElement).style.background = 'linear-gradient(135deg,#0A4174,#7BBDE8)'; (e.currentTarget as HTMLElement).style.boxShadow = '0 8px 28px rgba(0,29,57,0.6)' } }}
+          onMouseLeave={e => { (e.currentTarget as HTMLElement).style.transform = 'translateY(0)'; (e.currentTarget as HTMLElement).style.background = 'linear-gradient(135deg,#0A4174,#49769F)'; (e.currentTarget as HTMLElement).style.boxShadow = '0 4px 20px rgba(0,29,57,0.5)' }}
+        >
+          {isLoading ? 'Connexion en cours...' : isLogin ? 'Se connecter' : 'Créer le compte'}
+        </button>
+      </form>
+
+      <div style={{ display: 'flex', alignItems: 'center', gap: '10px', margin: '18px 0' }}>
+        <div style={{ flex: 1, height: '1px', background: 'rgba(193,232,255,0.06)' }} />
+        <span style={{ fontSize: '9px', color: 'rgba(193,232,255,0.15)', fontFamily: 'monospace', textTransform: 'uppercase', letterSpacing: '0.08em' }}>système</span>
+        <div style={{ flex: 1, height: '1px', background: 'rgba(193,232,255,0.06)' }} />
+      </div>
+
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '5px' }}>
+        <div style={{ width: '5px', height: '5px', borderRadius: '50%', background: '#10b981', boxShadow: '0 0 5px #10b981' }} />
+        <span style={{ fontSize: '10px', color: 'rgba(193,232,255,0.2)', fontFamily: 'monospace' }}>
+          TTCS Platform · Ericsson ECS
+        </span>
+      </div>
+    </div>
+  )
+
+  const PanelBranding = (
+    <div style={{
+      background: 'linear-gradient(150deg,rgba(10,65,116,0.95) 0%,rgba(73,118,159,0.7) 100%)',
+      padding: '44px',
+      display: 'flex', flexDirection: 'column',
+      height: '100%', boxSizing: 'border-box',
+    }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '28px' }}>
+        <div style={{ width: '5px', height: '5px', borderRadius: '50%', background: '#10b981', boxShadow: '0 0 5px #10b981' }} />
+        <span style={{ fontSize: '10px', fontFamily: 'monospace', color: 'rgba(189,216,233,0.5)', textTransform: 'uppercase', letterSpacing: '0.12em' }}>TTCS Platform v2.0.0</span>
+      </div>
+
+      <h1 style={{ fontSize: '2rem', fontWeight: 800, color: 'white', lineHeight: 1.18, letterSpacing: '-0.03em', marginBottom: '14px' }}>
+        Supervision{' '}
+        <span style={{ background: 'linear-gradient(90deg,#BDD8E9,#7BBDE8)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>
+          intelligente
+        </span>{' '}
+        du réseau ECS
+      </h1>
+
+      <p style={{ fontSize: '13px', color: 'rgba(189,216,233,0.45)', lineHeight: 1.7, marginBottom: '28px' }}>
+        Plateforme de HealthCheck en temps réel du Charging System Ericsson pour Tunisie Telecom.
+      </p>
+
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', flex: 1 }}>
+        {[
+          { path: 'M22 12h-4l-3 9L9 3l-3 9H2', label: 'HealthCheck', desc: 'HW · OS · APP · CIP' },
+          { path: 'M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z', label: 'Anomalies', desc: 'Corrélation multi-nœuds' },
+          { path: 'M18 20V10M12 20V4M6 20v-6', label: 'Prédiction CIP', desc: 'Isolation Forest · Z-score' },
+          { path: 'M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z', label: 'Assistant IA', desc: 'Groq LLaMA 3.3 70B' },
+        ].map(({ path, label, desc }) => (
+          <div key={label} style={{ background: 'rgba(189,216,233,0.06)', border: '1px solid rgba(189,216,233,0.1)', borderRadius: '12px', padding: '18px 20px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '6px' }}>
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="rgba(189,216,233,0.7)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d={path} />
+              </svg>
+              <span style={{ fontSize: '13px', fontWeight: 700, color: 'rgba(255,255,255,0.85)' }}>{label}</span>
+            </div>
+            <span style={{ fontSize: '11px', fontFamily: 'monospace', color: 'rgba(189,216,233,0.35)', lineHeight: 1.5 }}>{desc}</span>
+          </div>
+        ))}
+      </div>
+
+      <div style={{ marginTop: '24px', paddingTop: '20px', borderTop: '1px solid rgba(189,216,233,0.08)', display: 'flex', alignItems: 'center', gap: '14px' }}>
+        <div style={{ width: '42px', height: '42px', background: 'rgba(255,255,255,0.1)', border: '1px solid rgba(255,255,255,0.18)', borderRadius: '10px', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '5px', flexShrink: 0 }}>
+          <img src="/ericsson.jpg" alt="Ericsson" style={{ width: '32px', height: '32px', objectFit: 'contain', filter: 'brightness(0) invert(1)' }} />
+        </div>
+        <div style={{ width: '1px', height: '24px', background: 'rgba(255,255,255,0.12)' }} />
+        <div style={{ width: '42px', height: '42px', borderRadius: '10px', overflow: 'hidden', border: '1px solid rgba(255,255,255,0.18)', background: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+          <img src="/tt.jpg" alt="TT" style={{ width: '100%', height: '100%', objectFit: 'contain', padding: '3px' }} />
+        </div>
+        <div>
+          <div style={{ fontSize: '12px', fontWeight: 700, color: 'rgba(255,255,255,0.85)', letterSpacing: '0.03em' }}>TTCS Platform</div>
+          <div style={{ fontSize: '10px', color: 'rgba(189,216,233,0.35)', fontFamily: 'monospace' }}>Ericsson × Tunisie Telecom</div>
+        </div>
+      </div>
+    </div>
+  )
+
   return (
     <div style={{
       minHeight: '100vh',
-      background: '#020d1a',
-      display: 'flex',
-      alignItems: 'center',
-      justifyContent: 'center',
-      overflow: 'hidden',
-      position: 'relative',
+      display: 'flex', alignItems: 'center', justifyContent: 'center',
+      fontFamily: '"Sora", system-ui, sans-serif',
+      background: '#021024',
+      padding: '40px',
+      position: 'relative', overflow: 'hidden',
     }}>
 
-      {/* ── Background Effects ── */}
+      {/* Orbes */}
+      <div style={{ position: 'absolute', width: '600px', height: '600px', top: '-200px', left: '-150px', borderRadius: '50%', background: 'radial-gradient(circle,rgba(73,118,159,0.2) 0%,transparent 70%)', pointerEvents: 'none' }} />
+      <div style={{ position: 'absolute', width: '500px', height: '500px', bottom: '-200px', right: '-100px', borderRadius: '50%', background: 'radial-gradient(circle,rgba(189,216,233,0.12) 0%,transparent 70%)', pointerEvents: 'none' }} />
 
-      {/* Grid lines */}
-      <div style={{
-        position: 'absolute', inset: 0,
-        backgroundImage: `
-          linear-gradient(rgba(0,130,240,0.04) 1px, transparent 1px),
-          linear-gradient(90deg, rgba(0,130,240,0.04) 1px, transparent 1px)
-        `,
-        backgroundSize: '50px 50px',
-        pointerEvents: 'none',
-      }} />
+      {/* Grille */}
+      <div style={{ position: 'absolute', inset: 0, backgroundImage: 'linear-gradient(rgba(189,216,233,0.03) 1px,transparent 1px),linear-gradient(90deg,rgba(189,216,233,0.03) 1px,transparent 1px)', backgroundSize: '44px 44px', pointerEvents: 'none' }} />
 
-      {/* Glowing orbs */}
+      {/* Carte flottante */}
       <div style={{
-        position: 'absolute',
-        top: '-100px', left: '-100px',
-        width: '500px', height: '500px',
-        borderRadius: '50%',
-        background: 'radial-gradient(circle, rgba(0,100,220,0.2) 0%, transparent 70%)',
-        pointerEvents: 'none',
-        animation: 'float1 8s ease-in-out infinite',
-      }} />
-      <div style={{
-        position: 'absolute',
-        bottom: '-150px', right: '-100px',
-        width: '600px', height: '600px',
-        borderRadius: '50%',
-        background: 'radial-gradient(circle, rgba(168,85,247,0.15) 0%, transparent 70%)',
-        pointerEvents: 'none',
-        animation: 'float2 10s ease-in-out infinite',
-      }} />
-      <div style={{
-        position: 'absolute',
-        top: '50%', left: '50%',
-        transform: 'translate(-50%, -50%)',
-        width: '800px', height: '800px',
-        borderRadius: '50%',
-        background: 'radial-gradient(circle, rgba(0,200,150,0.06) 0%, transparent 70%)',
-        pointerEvents: 'none',
-      }} />
-
-      {/* Animated diagonal lines */}
-      <div style={{
-        position: 'absolute', inset: 0,
-        backgroundImage: `repeating-linear-gradient(
-          -45deg,
-          transparent,
-          transparent 100px,
-          rgba(0,130,240,0.015) 100px,
-          rgba(0,130,240,0.015) 101px
-        )`,
-        pointerEvents: 'none',
-      }} />
-
-      {/* Floating particles */}
-      {[...Array(6)].map((_, i) => (
-        <div key={i} style={{
-          position: 'absolute',
-          width: `${4 + i * 2}px`,
-          height: `${4 + i * 2}px`,
-          borderRadius: '50%',
-          background: ['#0082f0','#00d4aa','#a855f7','#f59e0b','#ef4444','#00cc88'][i],
-          opacity: 0.3,
-          top: `${10 + i * 15}%`,
-          left: `${5 + i * 16}%`,
-          animation: `particle${i % 3} ${5 + i}s ease-in-out infinite`,
-          pointerEvents: 'none',
-        }} />
-      ))}
-
-      {/* Corner decorations */}
-      <div style={{
-        position: 'absolute', top: '20px', left: '20px',
-        width: '60px', height: '60px',
-        borderTop: '2px solid rgba(0,130,240,0.3)',
-        borderLeft: '2px solid rgba(0,130,240,0.3)',
-        borderRadius: '4px 0 0 0',
-        pointerEvents: 'none',
-      }} />
-      <div style={{
-        position: 'absolute', bottom: '20px', right: '20px',
-        width: '60px', height: '60px',
-        borderBottom: '2px solid rgba(168,85,247,0.3)',
-        borderRight: '2px solid rgba(168,85,247,0.3)',
-        borderRadius: '0 0 4px 0',
-        pointerEvents: 'none',
-      }} />
-      <div style={{
-        position: 'absolute', top: '20px', right: '20px',
-        width: '40px', height: '40px',
-        borderTop: '2px solid rgba(0,212,170,0.3)',
-        borderRight: '2px solid rgba(0,212,170,0.3)',
-        borderRadius: '0 4px 0 0',
-        pointerEvents: 'none',
-      }} />
-      <div style={{
-        position: 'absolute', bottom: '20px', left: '20px',
-        width: '40px', height: '40px',
-        borderBottom: '2px solid rgba(245,158,11,0.3)',
-        borderLeft: '2px solid rgba(245,158,11,0.3)',
-        borderRadius: '0 0 0 4px',
-        pointerEvents: 'none',
-      }} />
-
-      {/* ── Main Content — centered ── */}
-      <div style={{
-        display: 'flex',
-        flexDirection: 'column',
-        alignItems: 'center',
-        width: '100%',
-        maxWidth: '520px',
-        padding: '20px',
-        position: 'relative',
-        zIndex: 10,
+        position: 'relative', zIndex: 2,
+        width: '100%', maxWidth: '960px',
+        borderRadius: '24px', overflow: 'hidden',
+        boxShadow: '0 40px 80px rgba(0,29,57,0.6), 0 0 0 1px rgba(189,216,233,0.1)',
         opacity: mounted ? 1 : 0,
-        transform: mounted ? 'translateY(0)' : 'translateY(30px)',
-        transition: 'all 0.8s ease',
+        transform: mounted ? 'translateY(0)' : 'translateY(20px)',
+        transition: 'opacity 0.7s ease, transform 0.7s ease',
       }}>
-
-        {/* Logos */}
-        <div style={{
-          display: 'flex', alignItems: 'center',
-          gap: '16px', marginBottom: '20px',
-        }}>
-          <div style={{
-            width: '56px', height: '56px',
-            background: 'linear-gradient(135deg, #0055aa, #0082f0)',
-            borderRadius: '14px',
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-            boxShadow: '0 8px 24px rgba(0,130,240,0.5)',
-          }}>
-            <img src="/ericsson.jpg" alt="Ericsson" style={{
-              width: '44px', height: '44px',
-              objectFit: 'contain',
-              filter: 'brightness(0) invert(1)',
-            }} />
-          </div>
-          <div style={{
-            height: '40px', width: '1px',
-            background: 'linear-gradient(180deg, transparent, rgba(255,255,255,0.2), transparent)',
-          }} />
-          <img src="/tt.jpg" alt="TT" style={{
-            width: '56px', height: '56px',
-            objectFit: 'contain', borderRadius: '12px',
-            boxShadow: '0 8px 24px rgba(0,0,0,0.4)',
-          }} />
-        </div>
-
-        {/* Title */}
-        <h1 style={{
-          fontSize: '2.4rem', fontWeight: 900,
-          textAlign: 'center', marginBottom: '6px',
-          background: 'linear-gradient(135deg, #ffffff 0%, #94c8ff 50%, #00d4aa 100%)',
-          WebkitBackgroundClip: 'text',
-          WebkitTextFillColor: 'transparent',
-          letterSpacing: '-0.02em',
-        }}>
-          TTCS Platform
-        </h1>
-
-        <p style={{
-          fontSize: '13px', color: '#5a7a99',
-          textAlign: 'center', marginBottom: '6px',
-        }}>
-          Ericsson Charging System — Tunisie Telecom
-        </p>
-
-        {/* TT gradient bar */}
-        <div style={{
-          height: '3px', width: '100px', borderRadius: '2px',
-          background: 'linear-gradient(90deg, #0066cc, #00cc88, #ffaa00, #ff3366, #aa00ff)',
-          marginBottom: '28px',
-        }} />
-
-        {/* Features row */}
-        <div style={{
-          display: 'flex', gap: '12px',
-          marginBottom: '28px', flexWrap: 'wrap',
-          justifyContent: 'center',
-        }}>
-          {[
-            { icon: '⚡', label: 'HealthCheck', color: '#0082f0' },
-            { icon: '🧠', label: 'IA Anomalies', color: '#00d4aa' },
-            { icon: '📊', label: 'Prédiction', color: '#a855f7' },
-            { icon: '💬', label: 'Assistant', color: '#f59e0b' },
-          ].map(({ icon, label, color }) => (
-            <div key={label} style={{
-              display: 'flex', alignItems: 'center', gap: '6px',
-              padding: '6px 12px', borderRadius: '20px',
-              background: `${color}15`,
-              border: `1px solid ${color}30`,
-            }}>
-              <span style={{ fontSize: '14px' }}>{icon}</span>
-              <span style={{ fontSize: '12px', color: '#7a9bc5', fontWeight: 500 }}>{label}</span>
-            </div>
-          ))}
-        </div>
-
-        {/* Glass Card */}
-        <div style={{
-          width: '100%',
-          background: 'rgba(8, 20, 42, 0.85)',
-          backdropFilter: 'blur(24px)',
-          borderRadius: '24px',
-          padding: '36px',
-          border: '1px solid rgba(0,130,240,0.2)',
-          boxShadow: '0 30px 80px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,255,255,0.05)',
-        }}>
-
-          {/* Card title */}
-          <div style={{ marginBottom: '24px', textAlign: 'center' }}>
-            <h2 style={{ fontSize: '1.3rem', fontWeight: 800, color: 'white', marginBottom: '4px' }}>
-              {isLogin ? '👋 Bienvenue' : '🚀 Créer un compte'}
-            </h2>
-            <p style={{ fontSize: '13px', color: '#4a6a8a' }}>
-              {isLogin
-                ? 'Connectez-vous à votre espace de supervision'
-                : 'Rejoignez la plateforme TTCS'}
-            </p>
-          </div>
-
-          {/* Tabs */}
-          <div style={{
-            display: 'flex',
-            background: 'rgba(0,130,240,0.08)',
-            borderRadius: '12px', padding: '4px',
-            marginBottom: '24px',
-            border: '1px solid rgba(0,130,240,0.12)',
-          }}>
-            {['Connexion', 'Nouveau compte'].map((tab, i) => (
-              <button key={tab} onClick={() => { setIsLogin(i === 0); setError('') }} style={{
-                flex: 1, padding: '10px', borderRadius: '10px',
-                border: 'none', cursor: 'pointer',
-                fontSize: '13px', fontWeight: 600,
-                background: isLogin === (i === 0)
-                  ? 'linear-gradient(135deg, #0055cc, #0082f0)'
-                  : 'transparent',
-                color: isLogin === (i === 0) ? 'white' : '#4a6a8a',
-                transition: 'all 0.25s',
-                boxShadow: isLogin === (i === 0) ? '0 4px 12px rgba(0,130,240,0.35)' : 'none',
-              }}>{tab}</button>
-            ))}
-          </div>
-
-          {/* Form */}
-          <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-
-            {!isLogin && (
-              <div>
-                <label style={{ fontSize: '11px', fontWeight: 700, color: '#4a6a8a', textTransform: 'uppercase', letterSpacing: '0.1em', display: 'block', marginBottom: '8px' }}>
-                  Nom complet
-                </label>
-                <input type="text" value={fullName}
-                  onChange={e => setFullName(e.target.value)}
-                  placeholder="Ahmed Ben Ali" required={!isLogin}
-                  style={{
-                    width: '100%', padding: '13px 16px', borderRadius: '12px',
-                    border: '1.5px solid rgba(0,130,240,0.2)',
-                    background: 'rgba(0,130,240,0.06)',
-                    fontSize: '14px', color: 'white', outline: 'none',
-                    boxSizing: 'border-box', transition: 'border-color 0.2s',
-                  }}
-                  onFocus={e => (e.target.style.borderColor = '#0082f0')}
-                  onBlur={e => (e.target.style.borderColor = 'rgba(0,130,240,0.2)')}
-                />
-              </div>
-            )}
-
-            <div>
-              <label style={{ fontSize: '11px', fontWeight: 700, color: '#4a6a8a', textTransform: 'uppercase', letterSpacing: '0.1em', display: 'block', marginBottom: '8px' }}>
-                Nom d&apos;utilisateur
-              </label>
-              <input type="text" value={username}
-                onChange={e => setUsername(e.target.value)}
-                placeholder="admin" required
-                style={{
-                  width: '100%', padding: '13px 16px', borderRadius: '12px',
-                  border: '1.5px solid rgba(0,130,240,0.2)',
-                  background: 'rgba(0,130,240,0.06)',
-                  fontSize: '14px', color: 'white', outline: 'none',
-                  boxSizing: 'border-box', transition: 'border-color 0.2s',
-                }}
-                onFocus={e => (e.target.style.borderColor = '#0082f0')}
-                onBlur={e => (e.target.style.borderColor = 'rgba(0,130,240,0.2)')}
-              />
-            </div>
-
-            <div>
-              <label style={{ fontSize: '11px', fontWeight: 700, color: '#4a6a8a', textTransform: 'uppercase', letterSpacing: '0.1em', display: 'block', marginBottom: '8px' }}>
-                Mot de passe
-              </label>
-              <input type="password" value={password}
-                onChange={e => setPassword(e.target.value)}
-                placeholder="••••••••" required
-                style={{
-                  width: '100%', padding: '13px 16px', borderRadius: '12px',
-                  border: '1.5px solid rgba(0,130,240,0.2)',
-                  background: 'rgba(0,130,240,0.06)',
-                  fontSize: '14px', color: 'white', outline: 'none',
-                  boxSizing: 'border-box', transition: 'border-color 0.2s',
-                }}
-                onFocus={e => (e.target.style.borderColor = '#0082f0')}
-                onBlur={e => (e.target.style.borderColor = 'rgba(0,130,240,0.2)')}
-              />
-            </div>
-
-            {error && (
-              <div style={{
-                padding: '12px 16px', borderRadius: '10px',
-                background: 'rgba(239,68,68,0.1)',
-                border: '1px solid rgba(239,68,68,0.3)',
-                color: '#ef4444', fontSize: '13px', fontWeight: 500,
-              }}>
-                ⚠️ {error}
-              </div>
-            )}
-
-            <button type="submit" disabled={isLoading} style={{
-              padding: '14px', borderRadius: '12px', border: 'none',
-              background: isLoading
-                ? 'rgba(0,130,240,0.4)'
-                : 'linear-gradient(135deg, #0055cc, #0082f0, #00aaff)',
-              color: 'white', fontSize: '15px', fontWeight: 700,
-              cursor: isLoading ? 'not-allowed' : 'pointer',
-              transition: 'all 0.2s', marginTop: '4px',
-              boxShadow: isLoading ? 'none' : '0 8px 24px rgba(0,130,240,0.4)',
-              letterSpacing: '0.02em',
-            }}
-              onMouseEnter={e => {
-                if (!isLoading)(e.currentTarget as HTMLElement).style.transform = 'translateY(-2px)'
-              }}
-              onMouseLeave={e => {
-                (e.currentTarget as HTMLElement).style.transform = 'translateY(0)'
-              }}
-            >
-              {isLoading ? '⏳ Chargement...' : isLogin ? '→ Se connecter' : '→ Créer le compte'}
-            </button>
-
-          </form>
-
-          {isLogin && (
-            <p style={{ textAlign: 'center', marginTop: '14px', fontSize: '12px', color: '#2a4a6a' }}>
-              Par défaut : <span style={{ color: '#4a7a9b', fontFamily: 'monospace' }}>admin / ttadmin</span>
-            </p>
+        <div style={{ display: 'grid', gridTemplateColumns: flipped ? '0.9fr 1.1fr' : '1.1fr 0.9fr' }}>
+          {flipped ? (
+            <>
+              <div>{PanelForm}</div>
+              <div style={{ borderLeft: '1px solid rgba(189,216,233,0.08)' }}>{PanelBranding}</div>
+            </>
+          ) : (
+            <>
+              <div style={{ borderRight: '1px solid rgba(189,216,233,0.08)' }}>{PanelBranding}</div>
+              <div>{PanelForm}</div>
+            </>
           )}
-
         </div>
-
-        {/* Bottom */}
-        <p style={{ marginTop: '20px', fontSize: '11px', color: '#2a4262', textAlign: 'center' }}>
-          Système de supervision Ericsson ECS • Version 2.0.0
-        </p>
-
       </div>
 
       <style>{`
-        input::placeholder { color: #3a5a7a !important; }
-        @keyframes float1 {
-          0%, 100% { transform: translate(0, 0) scale(1); }
-          50% { transform: translate(30px, 20px) scale(1.05); }
-        }
-        @keyframes float2 {
-          0%, 100% { transform: translate(0, 0) scale(1); }
-          50% { transform: translate(-20px, -30px) scale(1.08); }
-        }
-        @keyframes particle0 {
-          0%, 100% { transform: translateY(0px); opacity: 0.3; }
-          50% { transform: translateY(-20px); opacity: 0.6; }
-        }
-        @keyframes particle1 {
-          0%, 100% { transform: translateY(0px) translateX(0px); opacity: 0.2; }
-          50% { transform: translateY(-15px) translateX(10px); opacity: 0.5; }
-        }
-        @keyframes particle2 {
-          0%, 100% { transform: translateY(0px); opacity: 0.25; }
-          50% { transform: translateY(-25px); opacity: 0.55; }
-        }
+        input::placeholder { color: rgba(255,255,255,0.2) !important; }
       `}</style>
     </div>
   )

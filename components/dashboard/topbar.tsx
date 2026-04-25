@@ -39,55 +39,96 @@ export function Topbar({ onRefresh, isRefreshing, lastUpdate }: TopbarProps) {
   }, [])
 
   const getTitle = () => {
-    if (pathname.startsWith('/noeuds/')) {
-      return 'Détail du noeud'
-    }
+    if (pathname.startsWith('/noeuds/')) return 'Détail du noeud'
     return pageTitles[pathname] || 'TTCS Platform'
   }
 
   return (
-    <header className="sticky top-0 z-30 h-16 glass-card border-b border-border/30">
-      <div className="flex h-full items-center justify-between px-6">
-        <div className="flex items-center gap-4">
-          <h1 className="font-heading font-bold text-xl text-foreground">
+    <header style={{
+      position: 'sticky', top: 0, zIndex: 30,
+      height: '64px',
+      background: 'rgba(255,255,255,0.9)',
+      backdropFilter: 'blur(12px)',
+      borderBottom: '1px solid rgba(0,130,240,0.1)',
+      transition: 'all 0.3s ease',
+    }}>
+      <div style={{
+        display: 'flex', height: '100%',
+        alignItems: 'center', justifyContent: 'space-between',
+        padding: '0 24px',
+      }}>
+        {/* Left */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+          <h1 style={{
+            fontFamily: 'var(--font-heading)',
+            fontWeight: 700, fontSize: '20px',
+            color: '#0a1628',
+          }}>
             {getTitle()}
           </h1>
-          <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-accent/20 text-accent text-xs font-medium">
-            <Wifi className="h-3 w-3" />
-            <span>En ligne</span>
+          <div style={{
+            display: 'flex', alignItems: 'center', gap: '5px',
+            padding: '4px 10px', borderRadius: '20px',
+            background: 'rgba(0,212,170,0.12)',
+            border: '1px solid rgba(0,212,170,0.25)',
+          }}>
+            <Wifi size={12} style={{ color: '#00d4aa' }} />
+            <span style={{ fontSize: '11px', fontWeight: 600, color: '#00d4aa' }}>En ligne</span>
           </div>
         </div>
 
-        <div className="flex items-center gap-4">
+        {/* Right */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+
           {/* Last Update */}
           {lastUpdate && (
-            <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg glass-card border border-border/30 text-sm">
-              <span className="text-muted-foreground">Mise à jour:</span>
-              <span className="font-semibold text-foreground">
+            <div style={{
+              display: 'flex', alignItems: 'center', gap: '6px',
+              padding: '6px 12px', borderRadius: '8px',
+              background: 'rgba(0,130,240,0.05)',
+              border: '1px solid rgba(0,130,240,0.12)',
+              fontSize: '12px',
+            }}>
+              <span style={{ color: '#7a9bc5' }}>Mise à jour:</span>
+              <span style={{ fontWeight: 600, color: '#0a1628' }}>
                 {new Date(lastUpdate).toLocaleTimeString('fr-FR')}
               </span>
             </div>
           )}
 
-          {/* Current Time */}
-          <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg glass-card border border-border/30 text-sm">
-            <Clock className="h-4 w-4 text-primary" />
-            <span className="font-mono font-semibold text-foreground">{currentTime}</span>
+          {/* Clock */}
+          <div style={{
+            display: 'flex', alignItems: 'center', gap: '6px',
+            padding: '6px 12px', borderRadius: '8px',
+            background: 'rgba(0,130,240,0.05)',
+            border: '1px solid rgba(0,130,240,0.12)',
+          }}>
+            <Clock size={14} style={{ color: '#0082f0' }} />
+            <span style={{
+              fontFamily: 'monospace', fontWeight: 700, fontSize: '13px',
+              color: '#0a1628',
+            }}>{currentTime}</span>
           </div>
 
-          {/* Refresh Button */}
+          {/* Refresh */}
           {onRefresh && (
-            <button
-              onClick={onRefresh}
-              disabled={isRefreshing}
-              className="flex items-center gap-2 px-4 py-2 rounded-xl bg-gradient-to-r from-primary to-accent text-white text-sm font-semibold hover:opacity-90 transition-all disabled:opacity-50 shadow-lg shadow-primary/25"
-            >
-              <RefreshCw className={`h-4 w-4 ${isRefreshing ? 'animate-spin' : ''}`} />
+            <button onClick={onRefresh} disabled={isRefreshing} style={{
+              display: 'flex', alignItems: 'center', gap: '6px',
+              padding: '7px 16px', borderRadius: '8px', border: 'none',
+              background: 'linear-gradient(135deg,#0055cc,#0082f0)',
+              color: 'white', fontSize: '13px', fontWeight: 600,
+              cursor: isRefreshing ? 'not-allowed' : 'pointer',
+              opacity: isRefreshing ? 0.6 : 1,
+              transition: 'all 0.2s',
+            }}>
+              <RefreshCw size={13} style={{ animation: isRefreshing ? 'spin 1s linear infinite' : 'none' }} />
               Actualiser
             </button>
           )}
+
         </div>
       </div>
+      <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
     </header>
   )
 }

@@ -3,17 +3,10 @@
 import { useState, useRef, useEffect } from 'react'
 import { DashboardLayout } from '@/components/dashboard/dashboard-layout'
 import { Topbar } from '@/components/dashboard/topbar'
-import { StatusBadge } from '@/components/dashboard/status-badge'
-import { RoleBadge } from '@/components/dashboard/role-badge'
-import {
-  Send,
-  Bot,
-  User,
-  Loader2,
-  Lightbulb,
-  Sparkles,
-} from 'lucide-react'
-import { api, KNOWN_NODES } from '@/lib/api'
+import { Send, Bot, User, Loader2, Lightbulb, Sparkles } from 'lucide-react'
+import { KNOWN_NODES } from '@/lib/api'
+
+const API_BASE = 'http://192.168.147.129:8000'
 
 interface Message {
   id: string
@@ -23,226 +16,59 @@ interface Message {
 }
 
 const EXAMPLE_QUERIES = [
+  "quel est l'état du système ?",
   "état de jambala",
   "anomalies ttsdp17a",
-  "timeline ttocc1",
   "quelle est la cause probable ?",
-  "quel est le risque de dégradation ?",
-  "résumé global",
+  "quel est le risque de dégradation CIP ?",
+  "résumé global du système",
+  "compare les nœuds critiques",
+  "que faire pour résoudre les problèmes ?",
 ]
+
+function getUsername(): string {
+  try {
+    const cookies = document.cookie.split(';')
+    for (const cookie of cookies) {
+      const [name, value] = cookie.trim().split('=')
+      if (name === 'ttcs_user') {
+        const user = JSON.parse(decodeURIComponent(value))
+        return user.username || 'admin'
+      }
+    }
+  } catch { }
+  return 'admin'
+}
 
 export default function AssistantPage() {
   const [messages, setMessages] = useState<Message[]>([
     {
       id: '1',
       role: 'assistant',
-      content: `Bonjour ! Je suis l'assistant TTCS. Je peux vous aider à interroger le système de monitoring Ericsson Charging System.
+      content: `👋 Bonjour ! Je suis **TTCS Assistant**, propulsé par l'IA Groq (LLaMA 3.3 70B).
 
-Vous pouvez me demander :
-- L'état d'un noeud (ex: "état de jambala")
-- Les anomalies d'un noeud (ex: "anomalies ttsdp17a")
-- L'historique d'un noeud (ex: "timeline ttocc1")
-- La cause probable des incidents
-- Le niveau de risque global
+Je suis connecté en temps réel au système Ericsson Charging System de Tunisie Telecom.
 
-Noeuds disponibles : ${KNOWN_NODES.join(', ')}`,
+Je peux vous aider avec :
+- 🔍 **État des nœuds** — "état de jambala"
+- ⚠️ **Anomalies** — "anomalies ttsdp17a"
+- 🔗 **Corrélation** — "quelle est la cause probable ?"
+- 📊 **Prédiction CIP** — "quel est le risque ?"
+- 💡 **Recommandations** — "que faire pour résoudre ?"
+- 📋 **Résumé global** — "état général du système"
+
+Posez votre question en français !`,
       timestamp: new Date(),
     },
   ])
   const [input, setInput] = useState('')
   const [isLoading, setIsLoading] = useState(false)
+  const [groqHistory, setGroqHistory] = useState<Array<{role: string, content: string}>>([])
   const messagesEndRef = useRef<HTMLDivElement>(null)
 
-  const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
-  }
-
   useEffect(() => {
-    scrollToBottom()
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages])
-
-  const detectNode = (text: string): string | null => {
-    const lowerText = text.toLowerCase()
-    for (const node of KNOWN_NODES) {
-      if (lowerText.includes(node.toLowerCase())) {
-        return node
-      }
-    }
-    return null
-  }
-
-  const detectIntent = (text: string): string => {
-    const lowerText = text.toLowerCase()
-    
-    if (lowerText.includes('statut') || lowerText.includes('état') || lowerText.includes('status')) {
-      return 'status'
-    }
-    if (lowerText.includes('anomalie') || lowerText.includes('alerte')) {
-      return 'anomalies'
-    }
-    if (lowerText.includes('timeline') || lowerText.includes('historique')) {
-      return 'timeline'
-    }
-    if (lowerText.includes('cause') || lowerText.includes('corrélation') || lowerText.includes('incident')) {
-      return 'correlation'
-    }
-    if (lowerText.includes('risque') || lowerText.includes('prédiction') || lowerText.includes('prediction')) {
-      return 'predict'
-    }
-    if (lowerText.includes('résumé') || lowerText.includes('global') || lowerText.includes('overview')) {
-      return 'summary'
-    }
-    
-    return 'unknown'
-  }
-
-  const formatStatusResponse = (node: string, data: Record<string, unknown>) => {
-    const status = data as {
-      role: string
-      global_status: string
-      hw: { status: string; cpu_pct: number; ram_pct: number }
-      os: { status: string; load_avg_1m: number }
-      app: { status: string; critical_alarms: number; major_alarms: number; issues: string[] }
-    }
-    
-    return `**État du noeud ${node}** (${status.role})
-
-**Statut global:** ${status.global_status}
-
-**Hardware:**
-- Statut: ${status.hw.status}
-- CPU: ${status.hw.cpu_pct.toFixed(1)}%
-- RAM: ${status.hw.ram_pct.toFixed(1)}%
-
-**Système d'exploitation:**
-- Statut: ${status.os.status}
-- Load (1m): ${status.os.load_avg_1m}
-
-**Application:**
-- Statut: ${status.app.status}
-- Alarmes critiques: ${status.app.critical_alarms}
-- Alarmes majeures: ${status.app.major_alarms}
-${status.app.issues.length > 0 ? `- Problèmes: ${status.app.issues.join(', ')}` : '- Aucun problème détecté'}`
-  }
-
-  const formatAnomaliesResponse = (node: string, data: Record<string, unknown>) => {
-    const result = data as {
-      count: number
-      anomalies: Array<{
-        rule_id: string
-        severity: string
-        message: string
-        value: number
-        threshold: number
-      }>
-    }
-    
-    if (result.count === 0) {
-      return `Aucune anomalie détectée pour le noeud **${node}**.`
-    }
-    
-    let response = `**Anomalies du noeud ${node}** (${result.count} anomalie${result.count > 1 ? 's' : ''})\n\n`
-    
-    result.anomalies.forEach((a, i) => {
-      response += `${i + 1}. **${a.severity}** - ${a.message}\n   Valeur: ${a.value} (seuil: ${a.threshold})\n\n`
-    })
-    
-    return response
-  }
-
-  const formatTimelineResponse = (node: string, data: Record<string, unknown>) => {
-    const result = data as {
-      role: string
-      global_status: string
-      events: Array<{
-        type: string
-        message: string
-        severity?: string
-      }>
-      nb_anomalies: number
-    }
-    
-    let response = `**Timeline du noeud ${node}** (${result.role}) - Statut: ${result.global_status}\n\n`
-    
-    if (result.events.length === 0) {
-      response += 'Aucun événement dans la timeline.'
-    } else {
-      result.events.forEach((event, i) => {
-        response += `${i + 1}. [${event.type}] ${event.message}${event.severity ? ` (${event.severity})` : ''}\n`
-      })
-    }
-    
-    response += `\n**Total anomalies:** ${result.nb_anomalies}`
-    
-    return response
-  }
-
-  const formatCorrelationResponse = (data: Record<string, unknown>) => {
-    const result = data as {
-      cause_probable: string
-      noeuds_impactes: string[]
-      chaine_impact: string[]
-      nb_anomalies: number
-      nb_critical: number
-      nb_warning: number
-    }
-    
-    return `**Analyse de corrélation**
-
-**Cause probable:** ${result.cause_probable}
-
-**Chaîne d'impact:** ${result.chaine_impact.join(' → ') || 'Aucune'}
-
-**Noeuds impactés:** ${result.noeuds_impactes.join(', ') || 'Aucun'}
-
-**Statistiques:**
-- Anomalies totales: ${result.nb_anomalies}
-- Critiques: ${result.nb_critical}
-- Avertissements: ${result.nb_warning}`
-  }
-
-  const formatPredictResponse = (data: Record<string, unknown>) => {
-    const result = data as {
-      global: {
-        risk_level: string
-        risk_score: number
-        nb_sdp: number
-        interpretation: string
-      }
-    }
-    
-    return `**Analyse de risque**
-
-**Niveau de risque global:** ${result.global.risk_level}
-**Score de risque:** ${(result.global.risk_score * 100).toFixed(0)}%
-
-**Interprétation:** ${result.global.interpretation}
-
-**Noeuds SDP analysés:** ${result.global.nb_sdp}`
-  }
-
-  const formatSummaryResponse = (data: Record<string, unknown>) => {
-    const result = data as {
-      total_nodes: number
-      CRITICAL: number
-      WARNING: number
-      NORMAL: number
-      critical_nodes: string[]
-      warning_nodes: string[]
-      timestamp: string
-    }
-    
-    return `**Résumé global du système**
-
-**Total des noeuds:** ${result.total_nodes}
-
-**État par statut:**
-- Normaux: ${result.NORMAL}
-- Avertissements: ${result.WARNING} ${result.warning_nodes.length > 0 ? `(${result.warning_nodes.join(', ')})` : ''}
-- Critiques: ${result.CRITICAL} ${result.critical_nodes.length > 0 ? `(${result.critical_nodes.join(', ')})` : ''}
-
-**Dernière mise à jour:** ${new Date(result.timestamp).toLocaleString('fr-FR')}`
-  }
 
   const handleSend = async () => {
     if (!input.trim() || isLoading) return
@@ -254,104 +80,54 @@ ${status.app.issues.length > 0 ? `- Problèmes: ${status.app.issues.join(', ')}`
       timestamp: new Date(),
     }
 
-    setMessages((prev) => [...prev, userMessage])
+    setMessages(prev => [...prev, userMessage])
+    const question = input.trim()
     setInput('')
     setIsLoading(true)
 
     try {
-      const intent = detectIntent(userMessage.content)
-      const node = detectNode(userMessage.content)
-      let responseContent = ''
+      const res = await fetch(`${API_BASE}/chat`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          question,
+          history: groqHistory.slice(-6),
+          username: getUsername(),
+        }),
+      })
 
-      switch (intent) {
-        case 'status':
-          if (node) {
-            const data = await api.getNodeStatus(node)
-            responseContent = formatStatusResponse(node, data as unknown as Record<string, unknown>)
-          } else {
-            responseContent = 'Veuillez spécifier un noeud. Noeuds disponibles: ' + KNOWN_NODES.join(', ')
-          }
-          break
+      const data = await res.json()
 
-        case 'anomalies':
-          if (node) {
-            const data = await api.getNodeAnomalies(node)
-            responseContent = formatAnomaliesResponse(node, data as unknown as Record<string, unknown>)
-          } else {
-            const data = await api.getAnomalies()
-            responseContent = `**Anomalies globales** (${data.anomalies.length} anomalies)\n\n` +
-              data.anomalies.slice(0, 5).map((a, i) => 
-                `${i + 1}. **${a.node}** (${a.role}) - ${a.severity}: ${a.message}`
-              ).join('\n\n')
-          }
-          break
+      if (!res.ok) throw new Error(data.detail || 'Erreur API')
 
-        case 'timeline':
-          if (node) {
-            const data = await api.getTimeline(node)
-            responseContent = formatTimelineResponse(node, data as unknown as Record<string, unknown>)
-          } else {
-            responseContent = 'Veuillez spécifier un noeud pour voir sa timeline. Noeuds disponibles: ' + KNOWN_NODES.join(', ')
-          }
-          break
+      const reponse = data.reponse
 
-        case 'correlation':
-          {
-            const data = await api.getCorrelation()
-            responseContent = formatCorrelationResponse(data as unknown as Record<string, unknown>)
-          }
-          break
-
-        case 'predict':
-          {
-            const data = await api.getPredict()
-            responseContent = formatPredictResponse(data as unknown as Record<string, unknown>)
-          }
-          break
-
-        case 'summary':
-          {
-            const data = await api.getSummary()
-            responseContent = formatSummaryResponse(data as unknown as Record<string, unknown>)
-          }
-          break
-
-        default:
-          responseContent = `Je n'ai pas compris votre demande. Voici ce que je peux faire:
-
-- **État d'un noeud:** "état de [noeud]" ou "statut de [noeud]"
-- **Anomalies:** "anomalies [noeud]" ou "alertes [noeud]"
-- **Timeline:** "timeline [noeud]" ou "historique [noeud]"
-- **Corrélation:** "cause probable" ou "analyse de corrélation"
-- **Prédiction:** "risque" ou "prédiction"
-- **Résumé:** "résumé global" ou "overview"
-
-Noeuds disponibles: ${KNOWN_NODES.join(', ')}`
-      }
+      // Mettre à jour l'historique Groq
+      setGroqHistory(prev => [
+        ...prev,
+        { role: 'user', content: question },
+        { role: 'assistant', content: reponse },
+      ])
 
       const assistantMessage: Message = {
         id: (Date.now() + 1).toString(),
         role: 'assistant',
-        content: responseContent,
+        content: reponse,
         timestamp: new Date(),
       }
 
-      setMessages((prev) => [...prev, assistantMessage])
+      setMessages(prev => [...prev, assistantMessage])
+
     } catch (error) {
-      const errorMessage: Message = {
+      setMessages(prev => [...prev, {
         id: (Date.now() + 1).toString(),
         role: 'assistant',
-        content: 'Désolé, une erreur est survenue lors de la communication avec l\'API. Veuillez vérifier que le serveur est accessible.',
+        content: '❌ Erreur de connexion au serveur. Vérifiez que l\'API est démarrée sur 192.168.147.129:8000',
         timestamp: new Date(),
-      }
-      setMessages((prev) => [...prev, errorMessage])
+      }])
     } finally {
       setIsLoading(false)
     }
-  }
-
-  const handleExampleClick = (query: string) => {
-    setInput(query)
   }
 
   const handleKeyPress = (e: React.KeyboardEvent) => {
@@ -364,90 +140,211 @@ Noeuds disponibles: ${KNOWN_NODES.join(', ')}`
   return (
     <DashboardLayout>
       <Topbar />
-      
-      <div className="h-[calc(100vh-64px)] flex">
+
+      <div style={{ height: 'calc(100vh - 64px)', display: 'flex' }}>
+
         {/* Chat Area */}
-        <div className="flex-1 flex flex-col">
+        <div style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
+
+          {/* Header */}
+          <div style={{
+            padding: '16px 24px',
+            borderBottom: '1px solid rgba(0,130,240,0.1)',
+            background: 'rgba(255,255,255,0.8)',
+            display: 'flex', alignItems: 'center', gap: '12px',
+          }}>
+            <div style={{
+              width: '40px', height: '40px', borderRadius: '12px',
+              background: 'linear-gradient(135deg, #0055cc, #0082f0)',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+            }}>
+              <Bot size={20} style={{ color: 'white' }} />
+            </div>
+            <div>
+              <h2 style={{ fontSize: '15px', fontWeight: 700, color: '#0a1628' }}>
+                TTCS Assistant
+              </h2>
+              <p style={{ fontSize: '12px', color: '#4a6a8a' }}>
+                Propulsé par Groq LLaMA 3.3 70B • Données en temps réel
+              </p>
+            </div>
+            <div style={{
+              marginLeft: 'auto',
+              padding: '4px 12px', borderRadius: '20px',
+              background: 'rgba(16,185,129,0.1)',
+              border: '1px solid rgba(16,185,129,0.3)',
+              fontSize: '12px', color: '#10b981', fontWeight: 500,
+              display: 'flex', alignItems: 'center', gap: '6px',
+            }}>
+              <div style={{ width: '6px', height: '6px', borderRadius: '50%', background: '#10b981' }} />
+              En ligne
+            </div>
+          </div>
+
           {/* Messages */}
-          <div className="flex-1 overflow-y-auto p-6 space-y-4">
-            {messages.map((message) => (
+          <div style={{
+            flex: 1, overflowY: 'auto', padding: '24px',
+            display: 'flex', flexDirection: 'column', gap: '16px',
+          }}>
+            {messages.map(message => (
               <MessageBubble key={message.id} message={message} />
             ))}
+
             {isLoading && (
-              <div className="flex items-center gap-3 p-4">
-                <div className="p-2.5 rounded-full bg-gradient-to-br from-primary/20 to-accent/20">
-                  <Loader2 className="h-5 w-5 text-primary animate-spin" />
+              <div style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '16px' }}>
+                <div style={{
+                  width: '36px', height: '36px', borderRadius: '12px',
+                  background: 'linear-gradient(135deg, rgba(0,130,240,0.15), rgba(0,212,170,0.15))',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                }}>
+                  <Loader2 size={18} style={{ color: '#0082f0', animation: 'spin 1s linear infinite' }} />
                 </div>
-                <span className="text-muted-foreground">Recherche en cours...</span>
+                <div style={{
+                  padding: '12px 16px', borderRadius: '16px',
+                  background: 'rgba(255,255,255,0.85)',
+                  border: '1px solid rgba(0,130,240,0.15)',
+                  fontSize: '14px', color: '#4a6a8a',
+                }}>
+                  <span>L'assistant analyse le système</span>
+                  <span style={{ animation: 'blink 1.4s infinite' }}>...</span>
+                </div>
               </div>
             )}
+
             <div ref={messagesEndRef} />
           </div>
 
-          {/* Input Area */}
-          <div className="p-4 border-t border-border/30 glass-card">
-            <div className="flex gap-3">
+          {/* Input */}
+          <div style={{
+            padding: '16px 24px',
+            borderTop: '1px solid rgba(0,130,240,0.1)',
+            background: 'rgba(255,255,255,0.8)',
+          }}>
+            <div style={{ display: 'flex', gap: '12px' }}>
               <input
                 type="text"
                 value={input}
-                onChange={(e) => setInput(e.target.value)}
+                onChange={e => setInput(e.target.value)}
                 onKeyPress={handleKeyPress}
-                placeholder="Posez votre question..."
-                className="flex-1 px-5 py-3.5 rounded-xl glass-card border border-border/50 text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent"
+                placeholder="Posez votre question en français..."
                 disabled={isLoading}
+                style={{
+                  flex: 1, padding: '13px 18px', borderRadius: '12px',
+                  border: '1.5px solid rgba(0,130,240,0.2)',
+                  background: 'rgba(255,255,255,0.9)',
+                  fontSize: '14px', color: '#0a1628', outline: 'none',
+                  transition: 'border-color 0.2s',
+                }}
+                onFocus={e => (e.target.style.borderColor = '#0082f0')}
+                onBlur={e => (e.target.style.borderColor = 'rgba(0,130,240,0.2)')}
               />
               <button
                 onClick={handleSend}
                 disabled={!input.trim() || isLoading}
-                className="px-6 py-3.5 rounded-xl bg-gradient-to-r from-primary to-accent text-white font-semibold hover:opacity-90 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 shadow-lg shadow-primary/25"
+                style={{
+                  padding: '13px 24px', borderRadius: '12px', border: 'none',
+                  background: !input.trim() || isLoading
+                    ? 'rgba(0,130,240,0.3)'
+                    : 'linear-gradient(135deg, #0055cc, #0082f0)',
+                  color: 'white', fontWeight: 700, cursor: !input.trim() || isLoading ? 'not-allowed' : 'pointer',
+                  display: 'flex', alignItems: 'center', gap: '8px',
+                  fontSize: '14px', transition: 'all 0.2s',
+                  boxShadow: !input.trim() || isLoading ? 'none' : '0 4px 12px rgba(0,130,240,0.3)',
+                }}
               >
-                <Send className="h-4 w-4" />
+                <Send size={16} />
                 Envoyer
               </button>
             </div>
           </div>
         </div>
 
-        {/* Sidebar with Examples */}
-        <div className="w-80 border-l border-border/30 glass-card p-6">
-          <div className="flex items-center gap-2 mb-4">
-            <div className="p-2 rounded-lg bg-[#ffb020]/20">
-              <Lightbulb className="h-5 w-5 text-[#ffb020]" />
-            </div>
-            <h3 className="font-heading font-semibold text-foreground">Exemples de requêtes</h3>
-          </div>
-          <div className="space-y-2">
-            {EXAMPLE_QUERIES.map((query, index) => (
-              <button
-                key={index}
-                onClick={() => handleExampleClick(query)}
-                className="w-full text-left px-4 py-3 rounded-xl glass-card border border-border/30 text-muted-foreground hover:border-primary/50 hover:text-foreground transition-all text-sm"
-              >
-                &quot;{query}&quot;
-              </button>
-            ))}
-          </div>
+        {/* Sidebar */}
+        <div style={{
+          width: '300px', flexShrink: 0,
+          borderLeft: '1px solid rgba(0,130,240,0.1)',
+          background: 'rgba(255,255,255,0.7)',
+          padding: '20px', overflowY: 'auto',
+          display: 'flex', flexDirection: 'column', gap: '20px',
+        }}>
 
-          <div className="mt-6 pt-6 border-t border-border/30">
-            <div className="flex items-center gap-2 mb-3">
-              <div className="p-2 rounded-lg bg-primary/20">
-                <Sparkles className="h-4 w-4 text-primary" />
+          {/* Exemples */}
+          <div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '12px' }}>
+              <div style={{ padding: '6px', borderRadius: '8px', background: 'rgba(245,158,11,0.12)' }}>
+                <Lightbulb size={14} style={{ color: '#f59e0b' }} />
               </div>
-              <h4 className="font-medium text-foreground">Noeuds disponibles</h4>
+              <h3 style={{ fontSize: '13px', fontWeight: 700, color: '#0a1628' }}>
+                Exemples de questions
+              </h3>
             </div>
-            <div className="flex flex-wrap gap-2">
-              {KNOWN_NODES.map((node) => (
-                <span
-                  key={node}
-                  className="px-3 py-1.5 rounded-lg text-xs font-mono glass-card border border-border/30 text-foreground"
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+              {EXAMPLE_QUERIES.map((query, i) => (
+                <button key={i} onClick={() => setInput(query)} style={{
+                  padding: '10px 12px', borderRadius: '10px', 
+                  background: 'rgba(0,130,240,0.05)',
+                  border: '1px solid rgba(0,130,240,0.12)',
+                  color: '#4a6a8a', fontSize: '12px', textAlign: 'left',
+                  cursor: 'pointer', transition: 'all 0.2s',
+                }}
+                  onMouseEnter={e => {
+                    (e.currentTarget as HTMLElement).style.background = 'rgba(0,130,240,0.1)'
+                    ;(e.currentTarget as HTMLElement).style.color = '#0a1628'
+                  }}
+                  onMouseLeave={e => {
+                    (e.currentTarget as HTMLElement).style.background = 'rgba(0,130,240,0.05)'
+                    ;(e.currentTarget as HTMLElement).style.color = '#4a6a8a'
+                  }}
                 >
-                  {node}
-                </span>
+                  &ldquo;{query}&rdquo;
+                </button>
               ))}
             </div>
           </div>
+
+          {/* Nœuds */}
+          <div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '12px' }}>
+              <div style={{ padding: '6px', borderRadius: '8px', background: 'rgba(0,130,240,0.1)' }}>
+                <Sparkles size={14} style={{ color: '#0082f0' }} />
+              </div>
+              <h3 style={{ fontSize: '13px', fontWeight: 700, color: '#0a1628' }}>
+                Nœuds disponibles
+              </h3>
+            </div>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
+              {KNOWN_NODES.map(node => (
+                <button key={node} onClick={() => setInput(`état de ${node}`)} style={{
+                  padding: '5px 10px', borderRadius: '8px',
+                  background: 'rgba(0,130,240,0.06)',
+                  border: '1px solid rgba(0,130,240,0.2)',
+                  color: '#0082f0', fontSize: '11px', fontFamily: 'monospace',
+                  cursor: 'pointer', fontWeight: 600,
+                }}>
+                  {node}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Info */}
+          <div style={{
+            padding: '12px', borderRadius: '10px',
+            background: 'rgba(0,130,240,0.05)',
+            border: '1px solid rgba(0,130,240,0.12)',
+          }}>
+            <p style={{ fontSize: '11px', color: '#4a6a8a', lineHeight: 1.6 }}>
+              💡 L'assistant mémorise le contexte de la conversation. Vous pouvez poser des questions de suivi sans répéter les informations.
+            </p>
+          </div>
+
         </div>
       </div>
+
+      <style>{`
+        @keyframes spin { to { transform: rotate(360deg); } }
+        @keyframes blink { 0%, 100% { opacity: 1; } 50% { opacity: 0; } }
+      `}</style>
     </DashboardLayout>
   )
 }
@@ -455,35 +352,63 @@ Noeuds disponibles: ${KNOWN_NODES.join(', ')}`
 function MessageBubble({ message }: { message: Message }) {
   const isAssistant = message.role === 'assistant'
 
+  const renderContent = (content: string) => {
+    return content.split('\n').map((line, i) => {
+      const parts = line.split(/\*\*(.*?)\*\*/g)
+      return (
+        <p key={i} style={{ margin: i > 0 ? '4px 0 0' : '0' }}>
+          {parts.map((part, j) =>
+            j % 2 === 1
+              ? <strong key={j} style={{ color: isAssistant ? '#0082f0' : 'white', fontWeight: 700 }}>{part}</strong>
+              : part
+          )}
+        </p>
+      )
+    })
+  }
+
   return (
-    <div className={`flex items-start gap-3 ${isAssistant ? '' : 'flex-row-reverse'}`}>
-      <div className={`p-2.5 rounded-xl ${isAssistant ? 'bg-gradient-to-br from-primary/20 to-accent/20' : 'bg-gradient-to-br from-[#a855f7]/20 to-pink-500/20'}`}>
-        {isAssistant ? (
-          <Bot className="h-5 w-5 text-primary" />
-        ) : (
-          <User className="h-5 w-5 text-[#a855f7]" />
-        )}
+    <div style={{
+      display: 'flex', alignItems: 'flex-start', gap: '10px',
+      flexDirection: isAssistant ? 'row' : 'row-reverse',
+    }}>
+      {/* Avatar */}
+      <div style={{
+        width: '36px', height: '36px', borderRadius: '12px', flexShrink: 0,
+        background: isAssistant
+          ? 'linear-gradient(135deg, rgba(0,130,240,0.15), rgba(0,212,170,0.15))'
+          : 'linear-gradient(135deg, rgba(168,85,247,0.2), rgba(236,72,153,0.2))',
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        border: `1px solid ${isAssistant ? 'rgba(0,130,240,0.2)' : 'rgba(168,85,247,0.2)'}`,
+      }}>
+        {isAssistant
+          ? <Bot size={18} style={{ color: '#0082f0' }} />
+          : <User size={18} style={{ color: '#a855f7' }} />
+        }
       </div>
-      <div
-        className={`max-w-[70%] rounded-2xl px-5 py-4 ${
-          isAssistant
-            ? 'glass-card gradient-border'
-            : 'bg-gradient-to-r from-primary to-accent text-white'
-        }`}
-      >
-        <div className={`text-sm whitespace-pre-wrap leading-relaxed ${isAssistant ? 'text-foreground' : ''}`}>
-          {message.content.split('\n').map((line, i) => {
-            const parts = line.split(/\*\*(.*?)\*\*/g)
-            return (
-              <p key={i} className={i > 0 ? 'mt-2' : ''}>
-                {parts.map((part, j) => 
-                  j % 2 === 1 ? <strong key={j} className={isAssistant ? 'text-primary' : ''}>{part}</strong> : part
-                )}
-              </p>
-            )
-          })}
+
+      {/* Bubble */}
+      <div style={{
+        maxWidth: '72%',
+        padding: '14px 18px',
+        borderRadius: isAssistant ? '4px 16px 16px 16px' : '16px 4px 16px 16px',
+        background: isAssistant
+          ? 'rgba(255,255,255,0.92)'
+          : 'linear-gradient(135deg, #0055cc, #0082f0)',
+        border: isAssistant ? '1px solid rgba(0,130,240,0.15)' : 'none',
+        boxShadow: '0 2px 8px rgba(0,0,0,0.06)',
+      }}>
+        <div style={{
+          fontSize: '14px', lineHeight: 1.6,
+          color: isAssistant ? '#0a1628' : 'white',
+          whiteSpace: 'pre-wrap',
+        }}>
+          {renderContent(message.content)}
         </div>
-        <p className={`text-xs mt-3 ${isAssistant ? 'text-muted-foreground' : 'text-white/70'}`}>
+        <p style={{
+          fontSize: '11px', marginTop: '8px',
+          color: isAssistant ? '#7a9bc5' : 'rgba(255,255,255,0.7)',
+        }}>
           {message.timestamp.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}
         </p>
       </div>

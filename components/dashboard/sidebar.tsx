@@ -14,7 +14,7 @@ import {
 
 const navigation = [
   { name: 'Tableau de bord', href: '/', icon: LayoutDashboard, color: '#0082f0' },
-  { name: 'Noeuds', href: '/noeuds', icon: Server, color: '#00d4aa' },
+  { name: 'Noeuds', href: '/noeuds', icon: Server, color: '#0099cc' },
   { name: 'Inventaire', href: '/inventaire', icon: Database, color: '#a855f7' },
   { name: 'Monitoring', href: '/monitoring', icon: Activity, color: '#f97316' },
   { name: 'Prédiction', href: '/prediction', icon: TrendingUp, color: '#ec4899' },
@@ -26,7 +26,7 @@ export function Sidebar() {
 
   return (
     <aside className="fixed left-0 top-0 z-40 h-screen w-[260px]" style={{
-      background: 'linear-gradient(180deg, #020d1a 0%, #041225 50%, #061830 100%)',
+      background: 'linear-gradient(180deg, #e8f4ff 0%, #dbeeff 50%, #cce4ff 100%)',
       borderRight: '1px solid rgba(0,130,240,0.2)',
     }}>
 
@@ -50,7 +50,7 @@ export function Sidebar() {
           }} />
         </div>
         <div>
-          <div style={{ fontSize: '14px', fontWeight: 700, color: 'white', letterSpacing: '0.05em' }}>
+          <div style={{ fontSize: '14px', fontWeight: 700, color: '#0a2540', letterSpacing: '0.05em' }}>
             ERICSSON
           </div>
           <div style={{ fontSize: '10px', color: '#0082f0', textTransform: 'uppercase', letterSpacing: '0.08em' }}>
@@ -78,22 +78,22 @@ export function Sidebar() {
                 display: 'flex', alignItems: 'center', gap: '12px',
                 padding: '11px 14px', borderRadius: '10px',
                 marginBottom: '4px',
-                background: isActive ? `${item.color}18` : 'transparent',
+                background: isActive ? `${item.color}20` : 'transparent',
                 borderLeft: isActive ? `3px solid ${item.color}` : '3px solid transparent',
                 transition: 'all 0.2s',
                 cursor: 'pointer',
               }}
                 onMouseEnter={e => {
-                  if (!isActive) (e.currentTarget as HTMLElement).style.background = 'rgba(255,255,255,0.05)'
+                  if (!isActive) (e.currentTarget as HTMLElement).style.background = 'rgba(0,100,200,0.08)'
                 }}
                 onMouseLeave={e => {
                   if (!isActive) (e.currentTarget as HTMLElement).style.background = 'transparent'
                 }}
               >
-                <Icon size={18} style={{ color: isActive ? item.color : 'rgba(255,255,255,0.5)', flexShrink: 0 }} />
+                <Icon size={18} style={{ color: isActive ? item.color : '#4a7aaa', flexShrink: 0 }} />
                 <span style={{
                   fontSize: '13px', fontWeight: isActive ? 600 : 400,
-                  color: isActive ? 'white' : 'rgba(255,255,255,0.5)',
+                  color: isActive ? '#0a2540' : '#2c5282',
                 }}>
                   {item.name}
                 </span>
@@ -122,8 +122,8 @@ export function Sidebar() {
         <div style={{
           display: 'flex', alignItems: 'center', gap: '10px',
           padding: '10px 12px', borderRadius: '10px',
-          background: 'rgba(255,255,255,0.04)',
-          border: '1px solid rgba(255,255,255,0.08)',
+          background: 'rgba(0,100,200,0.08)',
+          border: '1px solid rgba(0,130,240,0.2)',
           marginBottom: '10px',
         }}>
           <img src="/tt.jpg" alt="Tunisie Telecom" style={{
@@ -131,8 +131,8 @@ export function Sidebar() {
             objectFit: 'contain', borderRadius: '8px',
           }} />
           <div>
-            <div style={{ fontSize: '12px', fontWeight: 700, color: 'white' }}>Tunisie Telecom</div>
-            <div style={{ fontSize: '10px', color: '#5a7a99' }}>Version 2.0.0</div>
+            <div style={{ fontSize: '12px', fontWeight: 700, color: '#0a2540' }}>Tunisie Telecom</div>
+            <div style={{ fontSize: '10px', color: '#4a7aaa' }}>Version 2.0.0</div>
           </div>
         </div>
 

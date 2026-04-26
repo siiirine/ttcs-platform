@@ -8,9 +8,13 @@ interface DashboardLayoutProps {
 
 export function DashboardLayout({ children }: DashboardLayoutProps) {
   return (
-    <div className="min-h-screen bg-background">
+    <div style={{
+      minHeight: '100vh',
+      background: 'var(--bg-page)',
+      transition: 'background 0.3s ease',
+    }}>
       <Sidebar />
-      <main className="pl-[260px]">
+      <main style={{ paddingLeft: '260px' }}>
         {children}
       </main>
     </div>

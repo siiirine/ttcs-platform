@@ -32,16 +32,11 @@ export default function RootLayout({
   return (
     <html lang="fr" suppressHydrationWarning>
       <body className={`${sora.variable} ${sourceSans.variable} font-sans antialiased`}>
-        {/*
-          ThemeProvider DOIT rester ici même sans bouton toggle.
-          Certaines pages appellent useTheme() en interne (inventaire, noeuds...).
-          Sans ce Provider, elles crashent silencieusement et perdent leur style.
-          forcedTheme="light" verrouille le mode clair définitivement.
-        */}
         <ThemeProvider
           attribute="class"
-          forcedTheme="light"
+          defaultTheme="light"
           enableSystem={false}
+          storageKey="ttcs-theme"
         >
           {children}
         </ThemeProvider>

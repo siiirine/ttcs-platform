@@ -1,8 +1,9 @@
 'use client'
 
 import { usePathname } from 'next/navigation'
-import { Clock, RefreshCw, Wifi } from 'lucide-react'
+import { Clock, RefreshCw, Wifi, Sun, Moon } from 'lucide-react'
 import { useEffect, useState } from 'react'
+import { useTheme } from 'next-themes'
 
 const pageTitles: Record<string, string> = {
   '/': 'Tableau de bord',
@@ -22,8 +23,11 @@ interface TopbarProps {
 export function Topbar({ onRefresh, isRefreshing, lastUpdate }: TopbarProps) {
   const pathname = usePathname()
   const [currentTime, setCurrentTime] = useState<string>('')
+  const [mounted, setMounted] = useState(false)
+  const { resolvedTheme, setTheme } = useTheme()
 
   useEffect(() => {
+    setMounted(true)
     const updateTime = () => {
       setCurrentTime(
         new Date().toLocaleTimeString('fr-FR', {
@@ -43,13 +47,17 @@ export function Topbar({ onRefresh, isRefreshing, lastUpdate }: TopbarProps) {
     return pageTitles[pathname] || 'TTCS Platform'
   }
 
+  const isDark = resolvedTheme === 'dark'
+
   return (
     <header style={{
       position: 'sticky', top: 0, zIndex: 30,
       height: '64px',
-      background: 'rgba(255,255,255,0.9)',
+      background: isDark ? 'rgba(10,18,32,0.95)' : 'rgba(255,255,255,0.9)',
       backdropFilter: 'blur(12px)',
-      borderBottom: '1px solid rgba(0,130,240,0.1)',
+      borderBottom: isDark
+        ? '1px solid rgba(0,130,240,0.15)'
+        : '1px solid rgba(0,130,240,0.1)',
       transition: 'all 0.3s ease',
     }}>
       <div style={{
@@ -62,7 +70,7 @@ export function Topbar({ onRefresh, isRefreshing, lastUpdate }: TopbarProps) {
           <h1 style={{
             fontFamily: 'var(--font-heading)',
             fontWeight: 700, fontSize: '20px',
-            color: '#0a1628',
+            color: isDark ? '#e2e8f0' : '#0a1628',
           }}>
             {getTitle()}
           </h1>
@@ -85,12 +93,12 @@ export function Topbar({ onRefresh, isRefreshing, lastUpdate }: TopbarProps) {
             <div style={{
               display: 'flex', alignItems: 'center', gap: '6px',
               padding: '6px 12px', borderRadius: '8px',
-              background: 'rgba(0,130,240,0.05)',
+              background: isDark ? 'rgba(0,130,240,0.08)' : 'rgba(0,130,240,0.05)',
               border: '1px solid rgba(0,130,240,0.12)',
               fontSize: '12px',
             }}>
               <span style={{ color: '#7a9bc5' }}>Mise à jour:</span>
-              <span style={{ fontWeight: 600, color: '#0a1628' }}>
+              <span style={{ fontWeight: 600, color: isDark ? '#e2e8f0' : '#0a1628' }}>
                 {new Date(lastUpdate).toLocaleTimeString('fr-FR')}
               </span>
             </div>
@@ -100,15 +108,45 @@ export function Topbar({ onRefresh, isRefreshing, lastUpdate }: TopbarProps) {
           <div style={{
             display: 'flex', alignItems: 'center', gap: '6px',
             padding: '6px 12px', borderRadius: '8px',
-            background: 'rgba(0,130,240,0.05)',
+            background: isDark ? 'rgba(0,130,240,0.08)' : 'rgba(0,130,240,0.05)',
             border: '1px solid rgba(0,130,240,0.12)',
           }}>
             <Clock size={14} style={{ color: '#0082f0' }} />
             <span style={{
               fontFamily: 'monospace', fontWeight: 700, fontSize: '13px',
-              color: '#0a1628',
+              color: isDark ? '#e2e8f0' : '#0a1628',
             }}>{currentTime}</span>
           </div>
+
+          {/* ── Toggle Dark / Light ── */}
+          {mounted && (
+            <button
+              onClick={() => setTheme(isDark ? 'light' : 'dark')}
+              title={isDark ? 'Passer en mode clair' : 'Passer en mode sombre'}
+              style={{
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                width: '36px', height: '36px',
+                borderRadius: '8px', border: 'none',
+                background: isDark ? 'rgba(255,200,0,0.12)' : 'rgba(0,30,80,0.07)',
+                color: isDark ? '#fbbf24' : '#1e3a5f',
+                cursor: 'pointer',
+                transition: 'all 0.2s ease',
+                flexShrink: 0,
+              }}
+              onMouseEnter={e => {
+                (e.currentTarget as HTMLElement).style.background = isDark
+                  ? 'rgba(255,200,0,0.22)'
+                  : 'rgba(0,30,80,0.14)'
+              }}
+              onMouseLeave={e => {
+                (e.currentTarget as HTMLElement).style.background = isDark
+                  ? 'rgba(255,200,0,0.12)'
+                  : 'rgba(0,30,80,0.07)'
+              }}
+            >
+              {isDark ? <Sun size={17} /> : <Moon size={17} />}
+            </button>
+          )}
 
           {/* Refresh */}
           {onRefresh && (

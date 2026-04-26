@@ -2,6 +2,8 @@
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
+import { useTheme } from 'next-themes'
+import { useEffect, useState } from 'react'
 import {
   LayoutDashboard,
   Server,
@@ -23,17 +25,38 @@ const navigation = [
 
 export function Sidebar() {
   const pathname = usePathname()
+  const { resolvedTheme } = useTheme()
+  const [mounted, setMounted] = useState(false)
+
+  useEffect(() => { setMounted(true) }, [])
+
+  const isDark = mounted && resolvedTheme === 'dark'
+
+  // ── couleurs selon le thème ──
+  const bg       = isDark
+    ? 'linear-gradient(180deg, #020d1a 0%, #041225 50%, #061830 100%)'
+    : 'linear-gradient(180deg, #e8f4ff 0%, #dbeeff 50%, #cce4ff 100%)'
+  const border   = isDark ? 'rgba(0,130,240,0.2)' : 'rgba(0,130,240,0.2)'
+  const titleCol = isDark ? 'white'   : '#0a2540'
+  const textCol  = isDark ? 'rgba(255,255,255,0.5)' : '#2c5282'
+  const iconCol  = isDark ? 'rgba(255,255,255,0.5)' : '#4a7aaa'
+  const hoverBg  = isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,100,200,0.08)'
+  const userBg   = isDark ? 'rgba(255,255,255,0.04)' : 'rgba(0,100,200,0.08)'
+  const userBorder = isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,130,240,0.2)'
+  const userNameCol = isDark ? 'white' : '#0a2540'
+  const userSubCol  = isDark ? '#5a7a99' : '#4a7aaa'
 
   return (
     <aside className="fixed left-0 top-0 z-40 h-screen w-[260px]" style={{
-      background: 'linear-gradient(180deg, #e8f4ff 0%, #dbeeff 50%, #cce4ff 100%)',
-      borderRight: '1px solid rgba(0,130,240,0.2)',
+      background: bg,
+      borderRight: `1px solid ${border}`,
+      transition: 'background 0.3s ease',
     }}>
 
       {/* Logo */}
       <div style={{
         padding: '20px 24px',
-        borderBottom: '1px solid rgba(0,130,240,0.15)',
+        borderBottom: `1px solid ${isDark ? 'rgba(0,130,240,0.15)' : 'rgba(0,130,240,0.15)'}`,
         display: 'flex', alignItems: 'center', gap: '12px',
       }}>
         <div style={{
@@ -50,7 +73,7 @@ export function Sidebar() {
           }} />
         </div>
         <div>
-          <div style={{ fontSize: '14px', fontWeight: 700, color: '#0a2540', letterSpacing: '0.05em' }}>
+          <div style={{ fontSize: '14px', fontWeight: 700, color: titleCol, letterSpacing: '0.05em', transition: 'color 0.3s' }}>
             ERICSSON
           </div>
           <div style={{ fontSize: '10px', color: '#0082f0', textTransform: 'uppercase', letterSpacing: '0.08em' }}>
@@ -84,16 +107,17 @@ export function Sidebar() {
                 cursor: 'pointer',
               }}
                 onMouseEnter={e => {
-                  if (!isActive) (e.currentTarget as HTMLElement).style.background = 'rgba(0,100,200,0.08)'
+                  if (!isActive) (e.currentTarget as HTMLElement).style.background = hoverBg
                 }}
                 onMouseLeave={e => {
                   if (!isActive) (e.currentTarget as HTMLElement).style.background = 'transparent'
                 }}
               >
-                <Icon size={18} style={{ color: isActive ? item.color : '#4a7aaa', flexShrink: 0 }} />
+                <Icon size={18} style={{ color: isActive ? item.color : iconCol, flexShrink: 0, transition: 'color 0.3s' }} />
                 <span style={{
                   fontSize: '13px', fontWeight: isActive ? 600 : 400,
-                  color: isActive ? '#0a2540' : '#2c5282',
+                  color: isActive ? (isDark ? 'white' : '#0a2540') : textCol,
+                  transition: 'color 0.3s',
                 }}>
                   {item.name}
                 </span>
@@ -107,7 +131,7 @@ export function Sidebar() {
       <div style={{
         position: 'absolute', bottom: 0, left: 0, right: 0,
         padding: '16px 20px',
-        borderTop: '1px solid rgba(0,130,240,0.15)',
+        borderTop: `1px solid ${isDark ? 'rgba(0,130,240,0.15)' : 'rgba(0,130,240,0.15)'}`,
       }}>
         {/* Statut système */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '12px' }}>
@@ -122,17 +146,18 @@ export function Sidebar() {
         <div style={{
           display: 'flex', alignItems: 'center', gap: '10px',
           padding: '10px 12px', borderRadius: '10px',
-          background: 'rgba(0,100,200,0.08)',
-          border: '1px solid rgba(0,130,240,0.2)',
+          background: userBg,
+          border: `1px solid ${userBorder}`,
           marginBottom: '10px',
+          transition: 'background 0.3s, border-color 0.3s',
         }}>
           <img src="/tt.jpg" alt="Tunisie Telecom" style={{
             width: '40px', height: '40px',
             objectFit: 'contain', borderRadius: '8px',
           }} />
           <div>
-            <div style={{ fontSize: '12px', fontWeight: 700, color: '#0a2540' }}>Tunisie Telecom</div>
-            <div style={{ fontSize: '10px', color: '#4a7aaa' }}>Version 2.0.0</div>
+            <div style={{ fontSize: '12px', fontWeight: 700, color: userNameCol, transition: 'color 0.3s' }}>Tunisie Telecom</div>
+            <div style={{ fontSize: '10px', color: userSubCol, transition: 'color 0.3s' }}>Version 2.0.0</div>
           </div>
         </div>
 

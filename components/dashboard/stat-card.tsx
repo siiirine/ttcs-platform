@@ -1,5 +1,7 @@
 'use client'
 
+import { useTheme } from 'next-themes'
+import { useEffect, useState } from 'react'
 import type { LucideIcon } from 'lucide-react'
 
 interface StatCardProps {
@@ -12,8 +14,8 @@ interface StatCardProps {
 }
 
 const variantConfig = {
-  default:  { borderColor: '#0082f0', valueColor: '#0082f0', iconBg: 'rgba(0,130,240,0.12)', iconColor: '#0082f0' },
-  critical: { borderColor: '#ef4444', valueColor: '#ef4444', iconBg: 'rgba(239,68,68,0.12)', iconColor: '#ef4444' },
+  default:  { borderColor: '#0082f0', valueColor: '#0082f0', iconBg: 'rgba(0,130,240,0.12)',  iconColor: '#0082f0' },
+  critical: { borderColor: '#ef4444', valueColor: '#ef4444', iconBg: 'rgba(239,68,68,0.12)',  iconColor: '#ef4444' },
   warning:  { borderColor: '#f59e0b', valueColor: '#f59e0b', iconBg: 'rgba(245,158,11,0.12)', iconColor: '#f59e0b' },
   success:  { borderColor: '#10b981', valueColor: '#10b981', iconBg: 'rgba(16,185,129,0.12)', iconColor: '#10b981' },
 }
@@ -25,13 +27,19 @@ const TT_GRADIENTS = {
   success:  'linear-gradient(135deg, #00dd99, #00aaff, #aa00ff, #ff3399)',
 }
 
-const cardBg      = 'rgba(255,255,255,0.85)'
-const borderColor = 'rgba(0,130,240,0.15)'
-const labelColor  = '#4a6a8a'
-const subColor    = '#7a9bc5'
-
 export function StatCard({ title, value, subtitle, icon: Icon, variant = 'default', className }: StatCardProps) {
-  const cfg = variantConfig[variant]
+  const { resolvedTheme } = useTheme()
+  const [mounted, setMounted] = useState(false)
+  useEffect(() => { setMounted(true) }, [])
+
+  const isDark = mounted && resolvedTheme === 'dark'
+
+  const cfg        = variantConfig[variant]
+  const cardBg     = isDark ? 'rgba(15,25,45,0.9)'          : 'rgba(255,255,255,0.85)'
+  const borderCol  = isDark ? 'rgba(0,130,240,0.15)'         : 'rgba(0,130,240,0.15)'
+  const labelColor = isDark ? '#64748b'                       : '#4a6a8a'
+  const subColor   = isDark ? '#475569'                       : '#7a9bc5'
+  const shadow     = isDark ? '0 2px 12px rgba(0,0,0,0.3)'  : '0 2px 12px rgba(0,130,240,0.08)'
 
   return (
     <div
@@ -40,15 +48,15 @@ export function StatCard({ title, value, subtitle, icon: Icon, variant = 'defaul
         borderRadius: '14px',
         padding: '20px 24px',
         background: cardBg,
-        borderTop:    `1px solid ${borderColor}`,
-        borderRight:  `1px solid ${borderColor}`,
-        borderBottom: `1px solid ${borderColor}`,
+        borderTop:    `1px solid ${borderCol}`,
+        borderRight:  `1px solid ${borderCol}`,
+        borderBottom: `1px solid ${borderCol}`,
         borderLeft:   `4px solid ${cfg.borderColor}`,
         transition: 'all 0.35s ease',
         cursor: 'default',
         position: 'relative',
         overflow: 'hidden',
-        boxShadow: '0 2px 12px rgba(0,130,240,0.08)',
+        boxShadow: shadow,
       }}
       onMouseEnter={e => {
         const el = e.currentTarget as HTMLElement
@@ -71,12 +79,12 @@ export function StatCard({ title, value, subtitle, icon: Icon, variant = 'defaul
       onMouseLeave={e => {
         const el = e.currentTarget as HTMLElement
         el.style.transform         = 'translateY(0)'
-        el.style.borderTopColor    = borderColor
-        el.style.borderRightColor  = borderColor
-        el.style.borderBottomColor = borderColor
+        el.style.borderTopColor    = borderCol
+        el.style.borderRightColor  = borderCol
+        el.style.borderBottomColor = borderCol
         el.style.borderLeftColor   = cfg.borderColor
         el.style.background        = cardBg
-        el.style.boxShadow         = '0 2px 12px rgba(0,130,240,0.08)'
+        el.style.boxShadow         = shadow
         const val = el.querySelector('.stat-value') as HTMLElement
         const lbl = el.querySelector('.stat-label') as HTMLElement
         const sub = el.querySelector('.stat-sub')   as HTMLElement

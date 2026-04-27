@@ -4,14 +4,11 @@ import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 
 export default function LoginPage() {
-  const [isLogin, setIsLogin] = useState(true)
   const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
-  const [fullName, setFullName] = useState('')
-  const [error, setError] = useState('')
+  const [error, setError]       = useState('')
   const [isLoading, setIsLoading] = useState(false)
-  const [mounted, setMounted] = useState(false)
-  const [flipped] = useState(true)
+  const [mounted, setMounted]   = useState(false)
   const router = useRouter()
 
   useEffect(() => { setMounted(true) }, [])
@@ -21,19 +18,19 @@ export default function LoginPage() {
     setIsLoading(true)
     setError('')
     try {
-      const endpoint = isLogin ? '/auth/login' : '/auth/register'
-      const body = isLogin
-        ? { username, password }
-        : { username, password, full_name: fullName }
-      const res = await fetch(`http://192.168.147.129:8000${endpoint}`, {
+      const res = await fetch('http://192.168.147.129:8000/auth/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body),
+        body: JSON.stringify({ username, password }),
       })
       const data = await res.json()
       if (!res.ok) { setError(data.detail || 'Erreur de connexion'); return }
+
+      // ✅ Sauvegarde token + user + role (role nécessaire pour proxy.ts)
       document.cookie = `ttcs_token=${data.access_token}; path=/; max-age=86400`
       document.cookie = `ttcs_user=${encodeURIComponent(JSON.stringify(data.user))}; path=/; max-age=86400`
+      document.cookie = `ttcs_role=${data.user.role}; path=/; max-age=86400`
+
       router.push('/')
     } catch {
       setError('Impossible de contacter le serveur.')
@@ -68,50 +65,29 @@ export default function LoginPage() {
       height: '100%', boxSizing: 'border-box',
     }}>
       <div style={{ fontSize: '1.6rem', fontWeight: 700, color: 'white', letterSpacing: '-0.02em', marginBottom: '4px' }}>
-        {isLogin ? 'Bienvenue' : 'Créer un compte'}
+        Bienvenue
       </div>
-      <div style={{ fontSize: '12px', color: 'rgba(193,232,255,0.35)', marginBottom: '28px' }}>
-        {isLogin ? 'Connectez-vous à votre espace de supervision.' : 'Créez votre accès à la plateforme TTCS.'}
-      </div>
-
-      <div style={{ display: 'flex', borderBottom: '1px solid rgba(193,232,255,0.08)', marginBottom: '24px' }}>
-        {['Connexion', 'Nouveau compte'].map((tab, i) => (
-          <button key={tab} onClick={() => { setIsLogin(i === 0); setError('') }} style={{
-            padding: '9px 18px', fontSize: '12px', fontWeight: 500,
-            color: isLogin === (i === 0) ? 'white' : 'rgba(193,232,255,0.3)',
-            background: 'transparent', border: 'none',
-            borderBottom: isLogin === (i === 0) ? '2px solid #7BBDE8' : '2px solid transparent',
-            marginBottom: '-1px', cursor: 'pointer',
-            transition: 'all 0.2s', fontFamily: 'inherit',
-          }}>{tab}</button>
-        ))}
+      <div style={{ fontSize: '12px', color: 'rgba(193,232,255,0.35)', marginBottom: '36px' }}>
+        Connectez-vous à votre espace de supervision.
       </div>
 
       <form onSubmit={handleSubmit}>
-        {!isLogin && (
-          <div style={{ marginBottom: '16px' }}>
-            <label style={labelStyle}>Nom complet</label>
-            <input type="text" value={fullName} onChange={e => setFullName(e.target.value)}
-              placeholder="Ahmed Ben Ali" required={!isLogin} style={inputStyle}
-              onFocus={e => { e.target.style.borderColor = 'rgba(123,189,232,0.5)'; e.target.style.background = 'rgba(74,118,159,0.1)'; e.target.style.boxShadow = '0 0 0 3px rgba(74,118,159,0.08)' }}
-              onBlur={e => { e.target.style.borderColor = 'rgba(255,255,255,0.12)'; e.target.style.background = 'rgba(255,255,255,0.06)'; e.target.style.boxShadow = 'none' }}
-            />
-          </div>
-        )}
         <div style={{ marginBottom: '16px' }}>
           <label style={labelStyle}>Nom d&apos;utilisateur</label>
-          <input type="text" value={username} onChange={e => setUsername(e.target.value)}
+          <input
+            type="text" value={username} onChange={e => setUsername(e.target.value)}
             placeholder="admin" required style={inputStyle}
             onFocus={e => { e.target.style.borderColor = 'rgba(123,189,232,0.5)'; e.target.style.background = 'rgba(74,118,159,0.1)'; e.target.style.boxShadow = '0 0 0 3px rgba(74,118,159,0.08)' }}
-            onBlur={e => { e.target.style.borderColor = 'rgba(255,255,255,0.12)'; e.target.style.background = 'rgba(255,255,255,0.06)'; e.target.style.boxShadow = 'none' }}
+            onBlur={e =>  { e.target.style.borderColor = 'rgba(255,255,255,0.12)'; e.target.style.background = 'rgba(255,255,255,0.06)'; e.target.style.boxShadow = 'none' }}
           />
         </div>
-        <div style={{ marginBottom: '22px' }}>
+        <div style={{ marginBottom: '28px' }}>
           <label style={labelStyle}>Mot de passe</label>
-          <input type="password" value={password} onChange={e => setPassword(e.target.value)}
+          <input
+            type="password" value={password} onChange={e => setPassword(e.target.value)}
             placeholder="••••••••" required style={inputStyle}
             onFocus={e => { e.target.style.borderColor = 'rgba(123,189,232,0.5)'; e.target.style.background = 'rgba(74,118,159,0.1)'; e.target.style.boxShadow = '0 0 0 3px rgba(74,118,159,0.08)' }}
-            onBlur={e => { e.target.style.borderColor = 'rgba(255,255,255,0.12)'; e.target.style.background = 'rgba(255,255,255,0.06)'; e.target.style.boxShadow = 'none' }}
+            onBlur={e =>  { e.target.style.borderColor = 'rgba(255,255,255,0.12)'; e.target.style.background = 'rgba(255,255,255,0.06)'; e.target.style.boxShadow = 'none' }}
           />
         </div>
 
@@ -121,24 +97,26 @@ export default function LoginPage() {
           </div>
         )}
 
-        <button type="submit" disabled={isLoading} style={{
-          width: '100%', padding: '13px', borderRadius: '10px',
-          background: isLoading ? 'rgba(74,118,159,0.3)' : 'linear-gradient(135deg,#0A4174,#49769F)',
-          color: 'white', fontSize: '14px', fontWeight: 600,
-          cursor: isLoading ? 'not-allowed' : 'pointer',
-          fontFamily: 'inherit', letterSpacing: '0.01em',
-          border: '1px solid rgba(123,189,232,0.2)',
-          boxShadow: isLoading ? 'none' : '0 4px 20px rgba(0,29,57,0.5)',
-          transition: 'all 0.2s',
-        }}
+        <button
+          type="submit" disabled={isLoading}
+          style={{
+            width: '100%', padding: '13px', borderRadius: '10px',
+            background: isLoading ? 'rgba(74,118,159,0.3)' : 'linear-gradient(135deg,#0A4174,#49769F)',
+            color: 'white', fontSize: '14px', fontWeight: 600,
+            cursor: isLoading ? 'not-allowed' : 'pointer',
+            fontFamily: 'inherit', letterSpacing: '0.01em',
+            border: '1px solid rgba(123,189,232,0.2)',
+            boxShadow: isLoading ? 'none' : '0 4px 20px rgba(0,29,57,0.5)',
+            transition: 'all 0.2s',
+          }}
           onMouseEnter={e => { if (!isLoading) { (e.currentTarget as HTMLElement).style.transform = 'translateY(-1px)'; (e.currentTarget as HTMLElement).style.background = 'linear-gradient(135deg,#0A4174,#7BBDE8)'; (e.currentTarget as HTMLElement).style.boxShadow = '0 8px 28px rgba(0,29,57,0.6)' } }}
           onMouseLeave={e => { (e.currentTarget as HTMLElement).style.transform = 'translateY(0)'; (e.currentTarget as HTMLElement).style.background = 'linear-gradient(135deg,#0A4174,#49769F)'; (e.currentTarget as HTMLElement).style.boxShadow = '0 4px 20px rgba(0,29,57,0.5)' }}
         >
-          {isLoading ? 'Connexion en cours...' : isLogin ? 'Se connecter' : 'Créer le compte'}
+          {isLoading ? 'Connexion en cours...' : 'Se connecter'}
         </button>
       </form>
 
-      <div style={{ display: 'flex', alignItems: 'center', gap: '10px', margin: '18px 0' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: '10px', margin: '24px 0 16px' }}>
         <div style={{ flex: 1, height: '1px', background: 'rgba(193,232,255,0.06)' }} />
         <span style={{ fontSize: '9px', color: 'rgba(193,232,255,0.15)', fontFamily: 'monospace', textTransform: 'uppercase', letterSpacing: '0.08em' }}>système</span>
         <div style={{ flex: 1, height: '1px', background: 'rgba(193,232,255,0.06)' }} />
@@ -179,10 +157,10 @@ export default function LoginPage() {
 
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', flex: 1 }}>
         {[
-          { path: 'M22 12h-4l-3 9L9 3l-3 9H2', label: 'HealthCheck', desc: 'HW · OS · APP · CIP' },
-          { path: 'M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z', label: 'Anomalies', desc: 'Corrélation multi-nœuds' },
-          { path: 'M18 20V10M12 20V4M6 20v-6', label: 'Prédiction CIP', desc: 'Isolation Forest · Z-score' },
-          { path: 'M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z', label: 'Assistant IA', desc: 'Groq LLaMA 3.3 70B' },
+          { path: 'M22 12h-4l-3 9L9 3l-3 9H2',                                                                          label: 'HealthCheck',   desc: 'HW · OS · APP · CIP' },
+          { path: 'M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z',                                                       label: 'Anomalies',     desc: 'Corrélation multi-nœuds' },
+          { path: 'M18 20V10M12 20V4M6 20v-6',                                                                          label: 'Prédiction CIP',desc: 'Isolation Forest · Z-score' },
+          { path: 'M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z',                                    label: 'Assistant IA',  desc: 'Groq LLaMA 3.3 70B' },
         ].map(({ path, label, desc }) => (
           <div key={label} style={{ background: 'rgba(189,216,233,0.06)', border: '1px solid rgba(189,216,233,0.1)', borderRadius: '12px', padding: '18px 20px' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '6px' }}>
@@ -221,15 +199,12 @@ export default function LoginPage() {
       padding: '40px',
       position: 'relative', overflow: 'hidden',
     }}>
-
       {/* Orbes */}
       <div style={{ position: 'absolute', width: '600px', height: '600px', top: '-200px', left: '-150px', borderRadius: '50%', background: 'radial-gradient(circle,rgba(73,118,159,0.2) 0%,transparent 70%)', pointerEvents: 'none' }} />
       <div style={{ position: 'absolute', width: '500px', height: '500px', bottom: '-200px', right: '-100px', borderRadius: '50%', background: 'radial-gradient(circle,rgba(189,216,233,0.12) 0%,transparent 70%)', pointerEvents: 'none' }} />
-
       {/* Grille */}
       <div style={{ position: 'absolute', inset: 0, backgroundImage: 'linear-gradient(rgba(189,216,233,0.03) 1px,transparent 1px),linear-gradient(90deg,rgba(189,216,233,0.03) 1px,transparent 1px)', backgroundSize: '44px 44px', pointerEvents: 'none' }} />
 
-      {/* Carte flottante */}
       <div style={{
         position: 'relative', zIndex: 2,
         width: '100%', maxWidth: '960px',
@@ -239,24 +214,13 @@ export default function LoginPage() {
         transform: mounted ? 'translateY(0)' : 'translateY(20px)',
         transition: 'opacity 0.7s ease, transform 0.7s ease',
       }}>
-        <div style={{ display: 'grid', gridTemplateColumns: flipped ? '0.9fr 1.1fr' : '1.1fr 0.9fr' }}>
-          {flipped ? (
-            <>
-              <div>{PanelForm}</div>
-              <div style={{ borderLeft: '1px solid rgba(189,216,233,0.08)' }}>{PanelBranding}</div>
-            </>
-          ) : (
-            <>
-              <div style={{ borderRight: '1px solid rgba(189,216,233,0.08)' }}>{PanelBranding}</div>
-              <div>{PanelForm}</div>
-            </>
-          )}
+        <div style={{ display: 'grid', gridTemplateColumns: '0.9fr 1.1fr' }}>
+          <div>{PanelForm}</div>
+          <div style={{ borderLeft: '1px solid rgba(189,216,233,0.08)' }}>{PanelBranding}</div>
         </div>
       </div>
 
-      <style>{`
-        input::placeholder { color: rgba(255,255,255,0.2) !important; }
-      `}</style>
+      <style>{`input::placeholder { color: rgba(255,255,255,0.2) !important; }`}</style>
     </div>
   )
 }

@@ -3,7 +3,7 @@
 import { cn } from '@/lib/utils'
 
 interface StatusBadgeProps {
-  status: 'CRITICAL' | 'WARNING' | 'NORMAL'
+  status: 'CRITICAL' | 'WARNING' | 'NORMAL' | 'UNKNOWN'
   size?: 'sm' | 'md' | 'lg'
   pulse?: boolean
   showGlow?: boolean
@@ -35,6 +35,15 @@ export function StatusBadge({ status, size = 'md', pulse = false, showGlow = tru
       dot: 'bg-[#00d4aa]',
       label: 'NORMAL',
     },
+    // ✅ Nouveau — noeud ajouté manuellement, pas encore surveillé
+    UNKNOWN: {
+      bg: 'bg-[#6b7280]/15',
+      text: 'text-[#9ca3af]',
+      border: 'border-[#6b7280]/40',
+      glow: '',
+      dot: 'bg-[#6b7280]',
+      label: 'NON SURVEILLÉ',
+    },
   }
 
   const sizeConfig = {
@@ -49,7 +58,7 @@ export function StatusBadge({ status, size = 'md', pulse = false, showGlow = tru
     lg: 'h-2.5 w-2.5',
   }
 
-  const config = statusConfig[status]
+  const config = statusConfig[status] ?? statusConfig.UNKNOWN
 
   return (
     <span

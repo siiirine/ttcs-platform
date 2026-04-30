@@ -6,7 +6,7 @@ import { DashboardLayout } from '@/components/dashboard/dashboard-layout'
 import { adminApi, User, NodeAdmin } from '@/lib/api'
 import {
   Users, Server, Plus, Trash2,
-  KeyRound, RefreshCw, ShieldCheck, Eye, EyeOff,
+  KeyRound, RefreshCw, ShieldCheck, Eye, EyeOff, Pencil,
 } from 'lucide-react'
 
 const ROLES = ['CCN', 'AIR', 'SDP', 'VS', 'OCC', 'AF']
@@ -22,6 +22,15 @@ function useIsDark() {
   useEffect(() => setMounted(true), [])
   return mounted && resolvedTheme === 'dark'
 }
+
+// ✅ Email valide : @ericsson.com ou @tunisietelecom.com
+const ALLOWED_DOMAINS = ['@ericsson.com', '@tunisietelecom.com']
+function isValidEmail(email: string): boolean {
+  const e = email.trim().toLowerCase()
+  return ALLOWED_DOMAINS.some(d => e.endsWith(d)) && e.indexOf('@') > 0
+}
+const EMAIL_HINT = 'Adresse @ericsson.com ou @tunisietelecom.com'
+const EMAIL_ERROR = 'L\'email doit terminer par @ericsson.com ou @tunisietelecom.com'
 
 function Badge({ role }: { role: string }) {
   const c = roleColor[role] || '#6b7280'
@@ -46,31 +55,14 @@ function RoleBadge({ role }: { role: string }) {
   )
 }
 
-// ✅ Select avec options toujours lisibles (fond blanc, texte noir forcé)
 function StyledSelect({ value, onChange, children, style }: {
-  value: string
-  onChange: (v: string) => void
-  children: React.ReactNode
-  style?: React.CSSProperties
+  value: string; onChange: (v: string) => void; children: React.ReactNode; style?: React.CSSProperties
 }) {
-  return (
-    <select
-      value={value}
-      onChange={e => onChange(e.target.value)}
-      style={style}
-    >
-      {children}
-    </select>
-  )
+  return <select value={value} onChange={e => onChange(e.target.value)} style={style}>{children}</select>
 }
 
-// Option toujours sur fond blanc avec texte noir — indépendant du thème
 function Opt({ value, label }: { value: string; label: string }) {
-  return (
-    <option value={value} style={{ background: '#ffffff', color: '#0a1628', fontWeight: 500 }}>
-      {label}
-    </option>
-  )
+  return <option value={value} style={{ background: '#ffffff', color: '#0a1628', fontWeight: 500 }}>{label}</option>
 }
 
 function Modal({ title, children, onClose, isDark }: {
@@ -90,13 +82,17 @@ function Modal({ title, children, onClose, isDark }: {
   )
 }
 
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
+function Field({ label, children, hint, error }: {
+  label: string; children: React.ReactNode; hint?: string; error?: string
+}) {
   return (
     <div>
-      <label style={{ display: 'block', fontSize: '11px', fontWeight: 600, color: '#7a9bc5', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: '6px' }}>
+      <label style={{ display: 'block', fontSize: '11px', fontWeight: 600, color: error ? '#ef4444' : '#7a9bc5', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: '6px' }}>
         {label}
       </label>
       {children}
+      {hint && !error && <p style={{ margin: '4px 0 0', fontSize: '11px', color: '#7a9bc5' }}>{hint}</p>}
+      {error && <p style={{ margin: '4px 0 0', fontSize: '11px', color: '#ef4444' }}>⚠ {error}</p>}
     </div>
   )
 }
@@ -112,108 +108,149 @@ function btnStyle(color: string, outline = false): React.CSSProperties {
   }
 }
 
-// ── Page principale ───────────────────────────────────────────────────────────
+// ── Page ──────────────────────────────────────────────────────────────────────
 
 export default function AdminPage() {
   const isDark = useIsDark()
 
-  const cardBg     = isDark ? 'rgba(26,29,46,0.97)'     : 'rgba(255,255,255,0.9)'
-  const cardBorder = isDark ? 'rgba(255,255,255,0.08)'   : 'rgba(0,130,240,0.15)'
-  const titleCol   = isDark ? '#e8f4ff'                  : '#0a1628'
-  const subCol     = isDark ? '#7a9bc5'                  : '#7a9bc5'
-  const headCol    = isDark ? '#5a7a99'                  : '#7a9bc5'
-  const textCol    = isDark ? '#cdd6e0'                  : '#0a1628'
-  const text2Col   = isDark ? '#8899aa'                  : '#4a6a8a'
-  const rowHover   = isDark ? 'rgba(255,255,255,0.04)'   : 'rgba(0,130,240,0.03)'
-  const rowBorder  = isDark ? 'rgba(255,255,255,0.05)'   : 'rgba(0,130,240,0.06)'
-  const nodeBg     = isDark ? 'rgba(255,255,255,0.04)'   : 'white'
-  const nodeBorder = isDark ? 'rgba(255,255,255,0.08)'   : 'rgba(0,130,240,0.15)'
-  const monoTag    = isDark ? 'rgba(255,255,255,0.07)'   : 'rgba(0,130,240,0.06)'
-  const monoText   = isDark ? '#a0b4c8'                  : '#4a6a8a'
-
-  // ✅ Input : fond légèrement clair en dark pour que le texte soit visible
-  const inputBg     = isDark ? '#2a2d42' : 'white'
-  const inputBorder = isDark ? 'rgba(255,255,255,0.18)' : 'rgba(0,130,240,0.25)'
-  const inputColor  = isDark ? '#e8f4ff' : '#0a1628'
+  const cardBg     = isDark ? 'rgba(26,29,46,0.97)'    : 'rgba(255,255,255,0.9)'
+  const cardBorder = isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,130,240,0.15)'
+  const titleCol   = isDark ? '#e8f4ff'                : '#0a1628'
+  const subCol     = isDark ? '#7a9bc5'                : '#7a9bc5'
+  const headCol    = isDark ? '#5a7a99'                : '#7a9bc5'
+  const textCol    = isDark ? '#cdd6e0'                : '#0a1628'
+  const text2Col   = isDark ? '#8899aa'                : '#4a6a8a'
+  const rowHover   = isDark ? 'rgba(255,255,255,0.04)' : 'rgba(0,130,240,0.03)'
+  const rowBorder  = isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,130,240,0.06)'
+  const nodeBg     = isDark ? 'rgba(255,255,255,0.04)' : 'white'
+  const nodeBorder = isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,130,240,0.15)'
+  const monoTag    = isDark ? 'rgba(255,255,255,0.07)' : 'rgba(0,130,240,0.06)'
+  const monoText   = isDark ? '#a0b4c8'                : '#4a6a8a'
+  const inputBg     = isDark ? '#2a2d42'               : 'white'
+  const inputBorder = isDark ? 'rgba(255,255,255,0.18)': 'rgba(0,130,240,0.25)'
+  const inputColor  = isDark ? '#e8f4ff'               : '#0a1628'
 
   const inputS: React.CSSProperties = {
-    width: '100%', padding: '10px 14px',
+    width: '100%', padding: '10px 14px', borderRadius: '8px', fontSize: '13px',
+    outline: 'none', background: inputBg, color: inputColor, boxSizing: 'border-box',
     border: `1px solid ${inputBorder}`,
-    borderRadius: '8px', fontSize: '13px',
-    outline: 'none', background: inputBg,
-    color: inputColor, boxSizing: 'border-box',
   }
-
-  // ✅ Select : fond blanc forcé pour que les options soient lisibles
-  const selectS: React.CSSProperties = {
+  const inputErr: React.CSSProperties = {
     ...inputS,
-    // On garde le fond du select lui-même thémé
-    // mais les options seront toujours sur fond blanc (via <Opt>)
-    cursor: 'pointer',
+    border: '1px solid rgba(239,68,68,0.6)',
+    background: isDark ? 'rgba(239,68,68,0.08)' : 'rgba(239,68,68,0.04)',
   }
-
+  const selectS: React.CSSProperties = { ...inputS, cursor: 'pointer' }
   const card: React.CSSProperties = {
-    background: cardBg, border: `1px solid ${cardBorder}`,
-    borderRadius: '14px', padding: '24px',
+    background: cardBg, border: `1px solid ${cardBorder}`, borderRadius: '14px', padding: '24px',
     boxShadow: isDark ? '0 4px 24px rgba(0,0,0,0.4)' : '0 2px 12px rgba(0,130,240,0.08)',
   }
 
+  // ── State ──
   const [tab, setTab] = useState<'users' | 'nodes'>('users')
-  const [users, setUsers]           = useState<User[]>([])
-  const [loadingUsers, setLoadingUsers] = useState(true)
-  const [nodes, setNodes]           = useState<NodeAdmin[]>([])
-  const [loadingNodes, setLoadingNodes] = useState(true)
+  const [users, setUsers]     = useState<User[]>([])
+  const [loadingUsers, setLU] = useState(true)
+  const [nodes, setNodes]     = useState<NodeAdmin[]>([])
+  const [loadingNodes, setLN] = useState(true)
+  const [toast, setToast]     = useState<{ msg: string; ok: boolean } | null>(null)
 
-  const [showUserForm, setShowUserForm] = useState(false)
-  const [newUser, setNewUser] = useState({ username: '', password: '', full_name: '', email: '', role: 'operator' })
-  const [showPwd, setShowPwd]           = useState(false)
-  const [savingUser, setSavingUser]     = useState(false)
-  const [userError, setUserError]       = useState('')
-
-  const [resetTarget, setResetTarget]   = useState<User | null>(null)
-  const [newPwd, setNewPwd]             = useState('')
-  const [showNewPwd, setShowNewPwd]     = useState(false)
-  const [savingPwd, setSavingPwd]       = useState(false)
-
-  const [showNodeForm, setShowNodeForm] = useState(false)
-  const [newNode, setNewNode] = useState({ name: '', role: 'CCN', description: '', ip_address: '', server_type: '', port: '' })
-  const [savingNode, setSavingNode]     = useState(false)
-  const [nodeError, setNodeError]       = useState('')
-
-  const [toast, setToast] = useState<{ msg: string; ok: boolean } | null>(null)
   const showToast = (msg: string, ok = true) => {
     setToast({ msg, ok }); setTimeout(() => setToast(null), 3500)
   }
 
+  // Créer user
+  const [showCreate, setShowCreate] = useState(false)
+  const [newUser, setNewUser] = useState({ username: '', password: '', full_name: '', email: '', role: '' })
+  const [emailTouched, setEmailTouched] = useState(false)
+  const [roleTouched, setRoleTouched]   = useState(false)
+  const [showPwd, setShowPwd]           = useState(false)
+  const [savingCreate, setSavingCreate] = useState(false)
+  const [createError, setCreateError]   = useState('')
+
+  // ✅ Modifier user
+  const [editTarget, setEditTarget] = useState<User | null>(null)
+  const [editForm, setEditForm]     = useState({ full_name: '', email: '', role: '' })
+  const [editEmailTouched, setEditEmailTouched] = useState(false)
+  const [savingEdit, setSavingEdit]             = useState(false)
+  const [editError, setEditError]               = useState('')
+
+  // Reset pwd
+  const [resetTarget, setResetTarget] = useState<User | null>(null)
+  const [newPwd, setNewPwd]           = useState('')
+  const [showNewPwd, setShowNewPwd]   = useState(false)
+  const [savingPwd, setSavingPwd]     = useState(false)
+
+  // Créer noeud
+  const [showNode, setShowNode] = useState(false)
+  const [newNode, setNewNode]   = useState({ name: '', role: 'CCN', description: '', ip_address: '', server_type: '', port: '' })
+  const [savingNode, setSavingNode] = useState(false)
+  const [nodeError, setNodeError]   = useState('')
+
+  // Validations live
+  const createEmailError = emailTouched && newUser.email && !isValidEmail(newUser.email) ? EMAIL_ERROR : ''
+  const createRoleError  = roleTouched && !newUser.role ? 'Le rôle est obligatoire' : ''
+  const editEmailError   = editEmailTouched && editForm.email && !isValidEmail(editForm.email) ? EMAIL_ERROR : ''
+
   const fetchUsers = async () => {
-    setLoadingUsers(true)
+    setLU(true)
     try { const r = await adminApi.getUsers(); setUsers(r.users) }
     catch { showToast('Erreur chargement utilisateurs', false) }
-    finally { setLoadingUsers(false) }
+    finally { setLU(false) }
   }
   const fetchNodes = async () => {
-    setLoadingNodes(true)
+    setLN(true)
     try { const r = await adminApi.getNodes(); setNodes(r.nodes) }
     catch { showToast('Erreur chargement noeuds', false) }
-    finally { setLoadingNodes(false) }
+    finally { setLN(false) }
   }
   useEffect(() => { fetchUsers(); fetchNodes() }, [])
 
-  const handleCreateUser = async () => {
-    setUserError('')
-    if (!newUser.username || !newUser.password) { setUserError('Username et mot de passe requis'); return }
-    setSavingUser(true)
+  // ── Handlers ──
+
+  const handleCreate = async () => {
+    setCreateError('')
+    if (!newUser.username || !newUser.password) { setCreateError('Username et mot de passe requis'); return }
+    if (!newUser.email) { setCreateError('L\'email est obligatoire'); setEmailTouched(true); return }
+    if (!isValidEmail(newUser.email)) { setCreateError(EMAIL_ERROR); setEmailTouched(true); return }
+    if (!newUser.role) { setCreateError('Le rôle est obligatoire'); setRoleTouched(true); return }
+    setSavingCreate(true)
     try {
-      await adminApi.createUser(newUser)
+      await adminApi.createUser({ ...newUser, email: newUser.email.trim().toLowerCase() })
       showToast(`Utilisateur "${newUser.username}" créé`)
-      setShowUserForm(false)
-      setNewUser({ username: '', password: '', full_name: '', email: '', role: 'operator' })
+      setShowCreate(false)
+      setNewUser({ username: '', password: '', full_name: '', email: '', role: '' })
+      setEmailTouched(false); setRoleTouched(false)
       fetchUsers()
-    } catch (e) { setUserError(e instanceof Error ? e.message : 'Erreur') }
-    finally { setSavingUser(false) }
+    } catch (e) { setCreateError(e instanceof Error ? e.message : 'Erreur') }
+    finally { setSavingCreate(false) }
   }
 
-  const handleDeleteUser = async (u: User) => {
+  const openEdit = (u: User) => {
+    setEditTarget(u)
+    setEditForm({ full_name: u.full_name || '', email: u.email || '', role: u.role })
+    setEditError(''); setEditEmailTouched(false)
+  }
+
+  const handleEdit = async () => {
+    if (!editTarget) return
+    setEditError('')
+    if (editForm.email && !isValidEmail(editForm.email)) { setEditError(EMAIL_ERROR); setEditEmailTouched(true); return }
+    if (!editForm.role) { setEditError('Le rôle est obligatoire'); return }
+    setSavingEdit(true)
+    try {
+      await adminApi.updateUser(editTarget.id, {
+        full_name: editForm.full_name || undefined,
+        email: editForm.email ? editForm.email.trim().toLowerCase() : undefined,
+        role: editForm.role,
+      })
+      showToast(`Utilisateur "${editTarget.username}" modifié`)
+      setEditTarget(null)
+      fetchUsers()
+    } catch (e) { setEditError(e instanceof Error ? e.message : 'Erreur') }
+    finally { setSavingEdit(false) }
+  }
+
+  const handleDelete = async (u: User) => {
     if (!confirm(`Supprimer "${u.username}" ?`)) return
     try { await adminApi.deleteUser(u.id); showToast(`"${u.username}" supprimé`); fetchUsers() }
     catch (e) { showToast(e instanceof Error ? e.message : 'Erreur', false) }
@@ -237,7 +274,7 @@ export default function AdminPage() {
     try {
       await adminApi.createNode({ ...newNode, port: parseInt(newNode.port) })
       showToast(`Noeud "${newNode.name}" ajouté`)
-      setShowNodeForm(false)
+      setShowNode(false)
       setNewNode({ name: '', role: 'CCN', description: '', ip_address: '', server_type: '', port: '' })
       fetchNodes()
     } catch (e) { setNodeError(e instanceof Error ? e.message : 'Erreur') }
@@ -299,7 +336,7 @@ export default function AdminPage() {
               <button onClick={fetchUsers} style={btnStyle(isDark ? 'rgba(0,130,240,0.2)' : 'rgba(0,130,240,0.08)', true)}>
                 <RefreshCw size={13} style={{ color: '#0082f0' }} /><span style={{ color: '#0082f0' }}>Actualiser</span>
               </button>
-              <button onClick={() => setShowUserForm(true)} style={btnStyle('#0082f0')}>
+              <button onClick={() => setShowCreate(true)} style={btnStyle('#0082f0')}>
                 <Plus size={14} /> Nouvel opérateur
               </button>
             </div>
@@ -337,12 +374,17 @@ export default function AdminPage() {
                       <td style={{ padding: '12px', fontSize: '12px', color: subCol }}>{u.last_login ? new Date(u.last_login).toLocaleString('fr-FR') : 'Jamais'}</td>
                       <td style={{ padding: '12px' }}>
                         <div style={{ display: 'flex', gap: '6px' }}>
+                          {/* ✅ Bouton Modifier */}
+                          <button onClick={() => openEdit(u)} title="Modifier"
+                            style={{ background: 'rgba(0,130,240,0.12)', border: '1px solid rgba(0,130,240,0.35)', borderRadius: '8px', padding: '6px 10px', cursor: 'pointer', display: 'flex', alignItems: 'center' }}>
+                            <Pencil size={13} style={{ color: '#0082f0' }} />
+                          </button>
                           <button onClick={() => { setResetTarget(u); setNewPwd('') }} title="Réinitialiser mot de passe"
                             style={{ background: 'rgba(245,158,11,0.12)', border: '1px solid rgba(245,158,11,0.35)', borderRadius: '8px', padding: '6px 10px', cursor: 'pointer', display: 'flex', alignItems: 'center' }}>
                             <KeyRound size={13} style={{ color: '#f59e0b' }} />
                           </button>
                           {u.username !== 'admin' && (
-                            <button onClick={() => handleDeleteUser(u)} title="Supprimer"
+                            <button onClick={() => handleDelete(u)} title="Supprimer"
                               style={{ background: 'rgba(239,68,68,0.12)', border: '1px solid rgba(239,68,68,0.35)', borderRadius: '8px', padding: '6px 10px', cursor: 'pointer', display: 'flex', alignItems: 'center' }}>
                               <Trash2 size={13} style={{ color: '#ef4444' }} />
                             </button>
@@ -367,7 +409,7 @@ export default function AdminPage() {
               <button onClick={fetchNodes} style={btnStyle(isDark ? 'rgba(0,130,240,0.2)' : 'rgba(0,130,240,0.08)', true)}>
                 <RefreshCw size={13} style={{ color: '#0082f0' }} /><span style={{ color: '#0082f0' }}>Actualiser</span>
               </button>
-              <button onClick={() => setShowNodeForm(true)} style={btnStyle('#0082f0')}>
+              <button onClick={() => setShowNode(true)} style={btnStyle('#0082f0')}>
                 <Plus size={14} /> Nouveau noeud
               </button>
             </div>
@@ -383,7 +425,7 @@ export default function AdminPage() {
                       <div style={{ fontSize: '14px', fontWeight: 700, color: titleCol, marginBottom: '4px' }}>{n.name}</div>
                       <Badge role={n.role} />
                     </div>
-                    <button onClick={() => handleDeleteNode(n.name)} title="Supprimer"
+                    <button onClick={() => handleDeleteNode(n.name)}
                       style={{ background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.25)', borderRadius: '8px', padding: '6px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                       <Trash2 size={13} style={{ color: '#ef4444' }} />
                     </button>
@@ -395,9 +437,7 @@ export default function AdminPage() {
                       { label: `IP : ${n.ip_address}`, show: !!n.ip_address },
                       { label: n.server_type || '', show: !!n.server_type },
                     ].filter(x => x.show).map(x => (
-                      <span key={x.label} style={{ fontSize: '11px', color: monoText, fontFamily: 'monospace', background: monoTag, padding: '3px 8px', borderRadius: '6px' }}>
-                        {x.label}
-                      </span>
+                      <span key={x.label} style={{ fontSize: '11px', color: monoText, fontFamily: 'monospace', background: monoTag, padding: '3px 8px', borderRadius: '6px' }}>{x.label}</span>
                     ))}
                   </div>
                 </div>
@@ -407,9 +447,9 @@ export default function AdminPage() {
         </div>
       )}
 
-      {/* ══ MODAL créer user ══ */}
-      {showUserForm && (
-        <Modal title="Créer un opérateur" onClose={() => { setShowUserForm(false); setUserError('') }} isDark={isDark}>
+      {/* ══ MODAL Créer user ══ */}
+      {showCreate && (
+        <Modal title="Créer un opérateur" onClose={() => { setShowCreate(false); setCreateError(''); setEmailTouched(false); setRoleTouched(false) }} isDark={isDark}>
           <Field label="Nom d'utilisateur *">
             <input style={inputS} placeholder="ex: operateur1" value={newUser.username}
               onChange={e => setNewUser(p => ({ ...p, username: e.target.value }))} />
@@ -418,9 +458,11 @@ export default function AdminPage() {
             <input style={inputS} placeholder="ex: Ahmed Ben Ali" value={newUser.full_name}
               onChange={e => setNewUser(p => ({ ...p, full_name: e.target.value }))} />
           </Field>
-          <Field label="Email">
-            <input style={inputS} type="email" placeholder="ex: ahmed@tunisietelecom.tn" value={newUser.email}
-              onChange={e => setNewUser(p => ({ ...p, email: e.target.value }))} />
+          <Field label="Email *" hint={EMAIL_HINT} error={createEmailError}>
+            <input style={createEmailError ? inputErr : inputS} type="email"
+              placeholder="prenom.nom@ericsson.com" value={newUser.email}
+              onChange={e => setNewUser(p => ({ ...p, email: e.target.value }))}
+              onBlur={() => setEmailTouched(true)} />
           </Field>
           <Field label="Mot de passe *">
             <div style={{ position: 'relative' }}>
@@ -433,24 +475,54 @@ export default function AdminPage() {
               </button>
             </div>
           </Field>
-          <Field label="Rôle">
-            {/* ✅ select avec fond blanc forcé pour les options */}
-            <StyledSelect value={newUser.role} onChange={v => setNewUser(p => ({ ...p, role: v }))} style={selectS}>
+          {/* ✅ Rôle obligatoire — placeholder vide par défaut */}
+          <Field label="Rôle *" error={createRoleError}>
+            <StyledSelect value={newUser.role} onChange={v => { setNewUser(p => ({ ...p, role: v })); setRoleTouched(true) }} style={createRoleError ? { ...selectS, border: '1px solid rgba(239,68,68,0.6)' } : selectS}>
+              <Opt value=""         label="— Sélectionner un rôle —" />
               <Opt value="operator" label="Opérateur" />
               <Opt value="admin"    label="Administrateur" />
             </StyledSelect>
           </Field>
-          {userError && <p style={{ color: '#ef4444', fontSize: '12px', background: 'rgba(239,68,68,0.1)', padding: '8px 12px', borderRadius: '8px', margin: 0 }}>{userError}</p>}
+          {createError && <p style={{ color: '#ef4444', fontSize: '12px', background: 'rgba(239,68,68,0.1)', padding: '8px 12px', borderRadius: '8px', margin: 0 }}>{createError}</p>}
           <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>
-            <button type="button" onClick={() => { setShowUserForm(false); setUserError('') }} style={btnStyle('#7a9bc5', true)}>Annuler</button>
-            <button type="button" onClick={handleCreateUser} disabled={savingUser} style={btnStyle('#0082f0')}>
-              {savingUser ? 'Création...' : 'Créer'}
+            <button type="button" onClick={() => { setShowCreate(false); setCreateError(''); setEmailTouched(false); setRoleTouched(false) }} style={btnStyle('#7a9bc5', true)}>Annuler</button>
+            <button type="button" onClick={handleCreate} disabled={savingCreate} style={btnStyle('#0082f0')}>
+              {savingCreate ? 'Création...' : 'Créer'}
             </button>
           </div>
         </Modal>
       )}
 
-      {/* ══ MODAL reset password ══ */}
+      {/* ══ MODAL Modifier user ══ */}
+      {editTarget && (
+        <Modal title={`Modifier "${editTarget.username}"`} onClose={() => { setEditTarget(null); setEditError('') }} isDark={isDark}>
+          <Field label="Nom complet">
+            <input style={inputS} placeholder="ex: Ahmed Ben Ali" value={editForm.full_name}
+              onChange={e => setEditForm(p => ({ ...p, full_name: e.target.value }))} />
+          </Field>
+          <Field label="Email *" hint={EMAIL_HINT} error={editEmailError}>
+            <input style={editEmailError ? inputErr : inputS} type="email"
+              placeholder="prenom.nom@ericsson.com" value={editForm.email}
+              onChange={e => setEditForm(p => ({ ...p, email: e.target.value }))}
+              onBlur={() => setEditEmailTouched(true)} />
+          </Field>
+          <Field label="Rôle *">
+            <StyledSelect value={editForm.role} onChange={v => setEditForm(p => ({ ...p, role: v }))} style={selectS}>
+              <Opt value="operator" label="Opérateur" />
+              <Opt value="admin"    label="Administrateur" />
+            </StyledSelect>
+          </Field>
+          {editError && <p style={{ color: '#ef4444', fontSize: '12px', background: 'rgba(239,68,68,0.1)', padding: '8px 12px', borderRadius: '8px', margin: 0 }}>{editError}</p>}
+          <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>
+            <button type="button" onClick={() => { setEditTarget(null); setEditError('') }} style={btnStyle('#7a9bc5', true)}>Annuler</button>
+            <button type="button" onClick={handleEdit} disabled={savingEdit} style={btnStyle('#0082f0')}>
+              {savingEdit ? 'Enregistrement...' : 'Enregistrer'}
+            </button>
+          </div>
+        </Modal>
+      )}
+
+      {/* ══ MODAL Reset password ══ */}
       {resetTarget && (
         <Modal title="Réinitialiser le mot de passe" onClose={() => { setResetTarget(null); setNewPwd('') }} isDark={isDark}>
           <p style={{ color: subCol, fontSize: '13px', margin: 0 }}>
@@ -475,15 +547,14 @@ export default function AdminPage() {
         </Modal>
       )}
 
-      {/* ══ MODAL créer noeud ══ */}
-      {showNodeForm && (
-        <Modal title="Ajouter un noeud" onClose={() => { setShowNodeForm(false); setNodeError('') }} isDark={isDark}>
+      {/* ══ MODAL Créer noeud ══ */}
+      {showNode && (
+        <Modal title="Ajouter un noeud" onClose={() => { setShowNode(false); setNodeError('') }} isDark={isDark}>
           <Field label="Nom du noeud *">
             <input style={inputS} placeholder="ex: ttsdp18a" value={newNode.name}
               onChange={e => setNewNode(p => ({ ...p, name: e.target.value }))} />
           </Field>
           <Field label="Rôle *">
-            {/* ✅ Options toujours lisibles avec fond blanc */}
             <StyledSelect value={newNode.role} onChange={v => setNewNode(p => ({ ...p, role: v }))} style={selectS}>
               {ROLES.map(r => <Opt key={r} value={r} label={r} />)}
             </StyledSelect>
@@ -506,7 +577,7 @@ export default function AdminPage() {
           </Field>
           {nodeError && <p style={{ color: '#ef4444', fontSize: '12px', background: 'rgba(239,68,68,0.1)', padding: '8px 12px', borderRadius: '8px', margin: 0 }}>{nodeError}</p>}
           <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>
-            <button type="button" onClick={() => { setShowNodeForm(false); setNodeError('') }} style={btnStyle('#7a9bc5', true)}>Annuler</button>
+            <button type="button" onClick={() => { setShowNode(false); setNodeError('') }} style={btnStyle('#7a9bc5', true)}>Annuler</button>
             <button type="button" onClick={handleCreateNode} disabled={savingNode} style={btnStyle('#0082f0')}>
               {savingNode ? 'Ajout...' : 'Ajouter'}
             </button>

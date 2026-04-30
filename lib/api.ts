@@ -61,30 +61,16 @@ export interface PredictResponse {
   global: { risk_level: 'NORMAL'|'WARNING'|'CRITICAL'; risk_score: number; nb_sdp: number; interpretation: string }
 }
 
-// ── Types Admin ───────────────────────────────────────────────────────────────
-
 export interface User {
-  id: number
-  username: string
-  full_name: string
-  email: string | null       // ✅ nouveau
-  role: 'admin' | 'operator'
-  created_at: string
-  last_login: string | null
+  id: number; username: string; full_name: string
+  email: string | null; role: 'admin' | 'operator'
+  created_at: string; last_login: string | null
 }
-
 export interface NodeAdmin {
-  id: number
-  name: string
-  role: string
-  description: string
-  ip_address: string | null  // ✅ nouveau
-  server_type: string | null // ✅ nouveau
-  port: number
-  created_at: string
+  id: number; name: string; role: string; description: string
+  ip_address: string | null; server_type: string | null
+  port: number; created_at: string
 }
-
-// ── Token ─────────────────────────────────────────────────────────────────────
 
 function getToken(): string | null {
   if (typeof document === 'undefined') return null
@@ -108,12 +94,11 @@ async function fetchAPI<T>(endpoint: string, options?: RequestInit): Promise<T> 
       throw new Error('Session expirée')
     }
     if (response.status === 403) throw new Error('Accès refusé — réservé aux administrateurs')
-    throw new Error(`API Error: ${response.status} ${response.statusText}`)
+    const err = await response.json().catch(() => ({}))
+    throw new Error(err.detail || `API Error: ${response.status}`)
   }
   return response.json()
 }
-
-// ── API standard ──────────────────────────────────────────────────────────────
 
 export const api = {
   getSummary:       () => fetchAPI<SummaryResponse>('/summary'),
@@ -129,14 +114,19 @@ export const api = {
   refreshPredict:   () => fetchAPI<{ message: string }>('/predict/refresh', { method: 'POST' }),
 }
 
-// ── API Admin ─────────────────────────────────────────────────────────────────
-
 export const adminApi = {
   getUsers:      () => fetchAPI<{ users: User[] }>('/admin/users'),
-  createUser:    (data: { username: string; password: string; full_name?: string; email?: string; role: string }) =>
+
+  createUser:    (data: { username: string; password: string; full_name?: string; email: string; role: string }) =>
     fetchAPI<{ message: string; user: User }>('/admin/users', { method: 'POST', body: JSON.stringify(data) }),
+
+  // ✅ modifier un utilisateur (nom, email, rôle)
+  updateUser:    (id: number, data: { full_name?: string; email?: string; role?: string }) =>
+    fetchAPI<{ message: string; user: User }>(`/admin/users/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+
   deleteUser:    (id: number) =>
     fetchAPI<{ message: string }>(`/admin/users/${id}`, { method: 'DELETE' }),
+
   resetPassword: (id: number, password: string) =>
     fetchAPI<{ message: string }>(`/admin/users/${id}/password`, { method: 'PUT', body: JSON.stringify({ password }) }),
 

@@ -27,6 +27,7 @@ const EXAMPLE_QUERIES = [
   "que faire pour résoudre les problèmes ?",
 ]
 
+// ✅ Lit le username depuis le cookie ttcs_user
 function getUsername(): string {
   try {
     const cookies = document.cookie.split(';')
@@ -39,6 +40,20 @@ function getUsername(): string {
     }
   } catch { }
   return 'admin'
+}
+
+// ✅ Lit le token JWT depuis le cookie ttcs_token
+function getToken(): string {
+  try {
+    const cookies = document.cookie.split(';')
+    for (const cookie of cookies) {
+      const [name, value] = cookie.trim().split('=')
+      if (name === 'ttcs_token') {
+        return decodeURIComponent(value)
+      }
+    }
+  } catch { }
+  return ''
 }
 
 export default function AssistantPage() {
@@ -56,23 +71,53 @@ export default function AssistantPage() {
 
   const handleSend = async () => {
     if (!input.trim() || isLoading) return
-    const userMessage: Message = { id: Date.now().toString(), role: 'user', content: input.trim(), timestamp: new Date() }
+    const userMessage: Message = {
+      id: Date.now().toString(), role: 'user',
+      content: input.trim(), timestamp: new Date()
+    }
     setMessages(prev => [...prev, userMessage])
     const question = input.trim()
     setInput('')
     setIsLoading(true)
+
     try {
+      const token = getToken()
+
       const res = await fetch(`${API_BASE}/chat`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ question, history: groqHistory.slice(-6), username: getUsername() }),
+        headers: {
+          'Content-Type': 'application/json',
+          // ✅ FIX : token JWT injecté — sans ça → 401 Unauthorized
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify({
+          question,
+          history: groqHistory.slice(-6),
+          username: getUsername()
+        }),
       })
+
       const data = await res.json()
       if (!res.ok) throw new Error(data.detail || 'Erreur API')
-      setGroqHistory(prev => [...prev, { role: 'user', content: question }, { role: 'assistant', content: data.reponse }])
-      setMessages(prev => [...prev, { id: (Date.now() + 1).toString(), role: 'assistant', content: data.reponse, timestamp: new Date() }])
+
+      setGroqHistory(prev => [
+        ...prev,
+        { role: 'user', content: question },
+        { role: 'assistant', content: data.reponse }
+      ])
+      setMessages(prev => [...prev, {
+        id: (Date.now() + 1).toString(),
+        role: 'assistant',
+        content: data.reponse,
+        timestamp: new Date()
+      }])
     } catch {
-      setMessages(prev => [...prev, { id: (Date.now() + 1).toString(), role: 'assistant', content: "❌ Erreur de connexion au serveur. Vérifiez que l'API est démarrée sur 192.168.147.129:8000", timestamp: new Date() }])
+      setMessages(prev => [...prev, {
+        id: (Date.now() + 1).toString(),
+        role: 'assistant',
+        content: "❌ Erreur de connexion au serveur. Vérifiez que l'API est démarrée sur 192.168.147.129:8000",
+        timestamp: new Date()
+      }])
     } finally {
       setIsLoading(false)
     }
@@ -102,7 +147,13 @@ export default function AssistantPage() {
 
           {/* Messages */}
           <div style={{ flex: 1, overflowY: 'auto', padding: '24px', display: 'flex', flexDirection: 'column', gap: '16px' }}>
-            {messages.map(message => <MessageBubble key={message.id} message={message} cardBg={c.cardBg} textPrimary={c.textPrimary} textSecondary={c.textSecondary} border={c.border} />)}
+            {messages.map(message => (
+              <MessageBubble
+                key={message.id} message={message}
+                cardBg={c.cardBg} textPrimary={c.textPrimary}
+                textSecondary={c.textSecondary} border={c.border}
+              />
+            ))}
             {isLoading && (
               <div style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '16px' }}>
                 <div style={{ width: '36px', height: '36px', borderRadius: '12px', background: 'rgba(0,130,240,0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
@@ -129,7 +180,11 @@ export default function AssistantPage() {
                 onFocus={e => (e.target.style.borderColor = '#0082f0')}
                 onBlur={e => (e.target.style.borderColor = c.borderInput)}
               />
-              <button onClick={handleSend} disabled={!input.trim() || isLoading} style={{ padding: '13px 24px', borderRadius: '12px', border: 'none', background: !input.trim() || isLoading ? 'rgba(0,130,240,0.3)' : 'linear-gradient(135deg, #0055cc, #0082f0)', color: 'white', fontWeight: 700, cursor: !input.trim() || isLoading ? 'not-allowed' : 'pointer', display: 'flex', alignItems: 'center', gap: '8px', fontSize: '14px' }}>
+              <button
+                onClick={handleSend}
+                disabled={!input.trim() || isLoading}
+                style={{ padding: '13px 24px', borderRadius: '12px', border: 'none', background: !input.trim() || isLoading ? 'rgba(0,130,240,0.3)' : 'linear-gradient(135deg, #0055cc, #0082f0)', color: 'white', fontWeight: 700, cursor: !input.trim() || isLoading ? 'not-allowed' : 'pointer', display: 'flex', alignItems: 'center', gap: '8px', fontSize: '14px' }}
+              >
                 <Send size={16} /> Envoyer
               </button>
             </div>
@@ -141,12 +196,15 @@ export default function AssistantPage() {
 
           <div>
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '12px' }}>
-              <div style={{ padding: '6px', borderRadius: '8px', background: 'rgba(245,158,11,0.12)' }}><Lightbulb size={14} style={{ color: '#f59e0b' }} /></div>
+              <div style={{ padding: '6px', borderRadius: '8px', background: 'rgba(245,158,11,0.12)' }}>
+                <Lightbulb size={14} style={{ color: '#f59e0b' }} />
+              </div>
               <h3 style={{ fontSize: '13px', fontWeight: 700, color: c.textPrimary }}>Exemples de questions</h3>
             </div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
               {EXAMPLE_QUERIES.map((query, i) => (
-                <button key={i} onClick={() => setInput(query)} style={{ padding: '10px 12px', borderRadius: '10px', background: c.panelBg, border: `1px solid ${c.border}`, color: c.textSecondary, fontSize: '12px', textAlign: 'left', cursor: 'pointer', transition: 'all 0.2s' }}
+                <button key={i} onClick={() => setInput(query)}
+                  style={{ padding: '10px 12px', borderRadius: '10px', background: c.panelBg, border: `1px solid ${c.border}`, color: c.textSecondary, fontSize: '12px', textAlign: 'left', cursor: 'pointer', transition: 'all 0.2s' }}
                   onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = 'rgba(0,130,240,0.1)'; (e.currentTarget as HTMLElement).style.color = c.textPrimary }}
                   onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = c.panelBg; (e.currentTarget as HTMLElement).style.color = c.textSecondary }}
                 >
@@ -158,12 +216,16 @@ export default function AssistantPage() {
 
           <div>
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '12px' }}>
-              <div style={{ padding: '6px', borderRadius: '8px', background: 'rgba(0,130,240,0.1)' }}><Sparkles size={14} style={{ color: '#0082f0' }} /></div>
+              <div style={{ padding: '6px', borderRadius: '8px', background: 'rgba(0,130,240,0.1)' }}>
+                <Sparkles size={14} style={{ color: '#0082f0' }} />
+              </div>
               <h3 style={{ fontSize: '13px', fontWeight: 700, color: c.textPrimary }}>Nœuds disponibles</h3>
             </div>
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
               {KNOWN_NODES.map(node => (
-                <button key={node} onClick={() => setInput(`état de ${node}`)} style={{ padding: '5px 10px', borderRadius: '8px', background: 'rgba(0,130,240,0.08)', border: `1px solid ${c.border}`, color: '#0082f0', fontSize: '11px', fontFamily: 'monospace', cursor: 'pointer', fontWeight: 600 }}>
+                <button key={node} onClick={() => setInput(`état de ${node}`)}
+                  style={{ padding: '5px 10px', borderRadius: '8px', background: 'rgba(0,130,240,0.08)', border: `1px solid ${c.border}`, color: '#0082f0', fontSize: '11px', fontFamily: 'monospace', cursor: 'pointer', fontWeight: 600 }}
+                >
                   {node}
                 </button>
               ))}

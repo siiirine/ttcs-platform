@@ -12,6 +12,7 @@ const pageTitles: Record<string, string> = {
   '/monitoring': 'Monitoring',
   '/prediction': 'Prédiction',
   '/assistant': 'Assistant',
+  '/admin': 'Administration',
 }
 
 interface TopbarProps {
@@ -44,13 +45,18 @@ export function Topbar({ onRefresh, isRefreshing, lastUpdate }: TopbarProps) {
 
   const getTitle = () => {
     if (pathname.startsWith('/noeuds/')) return 'Détail du noeud'
+    if (pathname.startsWith('/admin')) return 'Administration'
     return pageTitles[pathname] || 'TTCS Platform'
   }
 
-  const isDark = resolvedTheme === 'dark'
+  // ✅ FIX : false avant montage → correspond au rendu serveur (defaultTheme=light)
+  // Après montage → vrai thème résolu. Évite le mismatch SSR/client.
+  const isDark = mounted ? resolvedTheme === 'dark' : false
 
   return (
-    <header style={{
+    // ✅ suppressHydrationWarning : dit à React d'ignorer les diff de style
+    // entre SSR (light) et premier rendu client (dark possible)
+    <header suppressHydrationWarning style={{
       position: 'sticky', top: 0, zIndex: 30,
       height: '64px',
       background: isDark ? 'rgba(10,18,32,0.95)' : 'rgba(255,255,255,0.9)',
@@ -65,9 +71,10 @@ export function Topbar({ onRefresh, isRefreshing, lastUpdate }: TopbarProps) {
         alignItems: 'center', justifyContent: 'space-between',
         padding: '0 24px',
       }}>
+
         {/* Left */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-          <h1 style={{
+          <h1 suppressHydrationWarning style={{
             fontFamily: 'var(--font-heading)',
             fontWeight: 700, fontSize: '20px',
             color: isDark ? '#e2e8f0' : '#0a1628',
@@ -90,7 +97,7 @@ export function Topbar({ onRefresh, isRefreshing, lastUpdate }: TopbarProps) {
 
           {/* Last Update */}
           {lastUpdate && (
-            <div style={{
+            <div suppressHydrationWarning style={{
               display: 'flex', alignItems: 'center', gap: '6px',
               padding: '6px 12px', borderRadius: '8px',
               background: isDark ? 'rgba(0,130,240,0.08)' : 'rgba(0,130,240,0.05)',
@@ -105,20 +112,22 @@ export function Topbar({ onRefresh, isRefreshing, lastUpdate }: TopbarProps) {
           )}
 
           {/* Clock */}
-          <div style={{
+          <div suppressHydrationWarning style={{
             display: 'flex', alignItems: 'center', gap: '6px',
             padding: '6px 12px', borderRadius: '8px',
             background: isDark ? 'rgba(0,130,240,0.08)' : 'rgba(0,130,240,0.05)',
             border: '1px solid rgba(0,130,240,0.12)',
           }}>
             <Clock size={14} style={{ color: '#0082f0' }} />
-            <span style={{
+            <span suppressHydrationWarning style={{
               fontFamily: 'monospace', fontWeight: 700, fontSize: '13px',
               color: isDark ? '#e2e8f0' : '#0a1628',
-            }}>{currentTime}</span>
+            }}>
+              {currentTime}
+            </span>
           </div>
 
-          {/* ── Toggle Dark / Light ── */}
+          {/* Toggle Dark / Light — rendu seulement après montage */}
           {mounted && (
             <button
               onClick={() => setTheme(isDark ? 'light' : 'dark')}

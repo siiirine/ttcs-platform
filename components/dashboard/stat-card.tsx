@@ -20,13 +20,6 @@ const variantConfig = {
   success:  { borderColor: '#10b981', valueColor: '#10b981', iconBg: 'rgba(16,185,129,0.12)', iconColor: '#10b981' },
 }
 
-const TT_GRADIENTS = {
-  default:  'linear-gradient(135deg, #0055cc, #00aaff, #00dd99, #aa00ff)',
-  critical: 'linear-gradient(135deg, #ff0044, #ff6600, #ffcc00, #ff3399)',
-  warning:  'linear-gradient(135deg, #ffcc00, #ff6600, #ff0044, #cc00ff)',
-  success:  'linear-gradient(135deg, #00dd99, #00aaff, #aa00ff, #ff3399)',
-}
-
 export function StatCard({ title, value, subtitle, icon: Icon, variant = 'default', className }: StatCardProps) {
   const { resolvedTheme } = useTheme()
   const [mounted, setMounted] = useState(false)
@@ -35,11 +28,12 @@ export function StatCard({ title, value, subtitle, icon: Icon, variant = 'defaul
   const isDark = mounted && resolvedTheme === 'dark'
 
   const cfg        = variantConfig[variant]
-  const cardBg     = isDark ? 'rgba(15,25,45,0.9)'          : 'rgba(255,255,255,0.85)'
-  const borderCol  = isDark ? 'rgba(0,130,240,0.15)'         : 'rgba(0,130,240,0.15)'
-  const labelColor = isDark ? '#64748b'                       : '#4a6a8a'
-  const subColor   = isDark ? '#475569'                       : '#7a9bc5'
-  const shadow     = isDark ? '0 2px 12px rgba(0,0,0,0.3)'  : '0 2px 12px rgba(0,130,240,0.08)'
+  const cardBg     = isDark ? 'rgba(15,25,45,0.9)'         : 'rgba(255,255,255,0.85)'
+  const borderCol  = isDark ? 'rgba(0,130,240,0.15)'        : 'rgba(0,130,240,0.15)'
+  const labelColor = isDark ? '#64748b'                      : '#4a6a8a'
+  const subColor   = isDark ? '#475569'                      : '#7a9bc5'
+  const shadow     = isDark ? '0 2px 12px rgba(0,0,0,0.3)' : '0 2px 12px rgba(0,130,240,0.08)'
+  const shadowHov  = isDark ? '0 8px 24px rgba(0,0,0,0.4)' : '0 8px 24px rgba(0,130,240,0.15)'
 
   return (
     <div
@@ -52,78 +46,51 @@ export function StatCard({ title, value, subtitle, icon: Icon, variant = 'defaul
         borderRight:  `1px solid ${borderCol}`,
         borderBottom: `1px solid ${borderCol}`,
         borderLeft:   `4px solid ${cfg.borderColor}`,
-        transition: 'all 0.35s ease',
         cursor: 'default',
         position: 'relative',
         overflow: 'hidden',
         boxShadow: shadow,
+        transition: 'transform 0.25s ease, box-shadow 0.25s ease',
       }}
       onMouseEnter={e => {
         const el = e.currentTarget as HTMLElement
-        el.style.transform         = 'translateY(-5px)'
-        el.style.borderTopColor    = 'transparent'
-        el.style.borderRightColor  = 'transparent'
-        el.style.borderBottomColor = 'transparent'
-        el.style.borderLeftColor   = 'transparent'
-        el.style.background        = TT_GRADIENTS[variant]
-        el.style.boxShadow         = '0 16px 40px rgba(0,0,0,0.25)'
-        const val = el.querySelector('.stat-value') as HTMLElement
-        const lbl = el.querySelector('.stat-label') as HTMLElement
-        const sub = el.querySelector('.stat-sub')   as HTMLElement
-        const ico = el.querySelector('.stat-icon')  as HTMLElement
-        if (val) val.style.color = 'white'
-        if (lbl) lbl.style.color = 'rgba(255,255,255,0.85)'
-        if (sub) sub.style.color = 'rgba(255,255,255,0.7)'
-        if (ico) ico.style.background = 'rgba(255,255,255,0.2)'
+        el.style.transform = 'translateY(-5px)'
+        el.style.boxShadow = shadowHov
       }}
       onMouseLeave={e => {
         const el = e.currentTarget as HTMLElement
-        el.style.transform         = 'translateY(0)'
-        el.style.borderTopColor    = borderCol
-        el.style.borderRightColor  = borderCol
-        el.style.borderBottomColor = borderCol
-        el.style.borderLeftColor   = cfg.borderColor
-        el.style.background        = cardBg
-        el.style.boxShadow         = shadow
-        const val = el.querySelector('.stat-value') as HTMLElement
-        const lbl = el.querySelector('.stat-label') as HTMLElement
-        const sub = el.querySelector('.stat-sub')   as HTMLElement
-        const ico = el.querySelector('.stat-icon')  as HTMLElement
-        if (val) val.style.color = cfg.valueColor
-        if (lbl) lbl.style.color = labelColor
-        if (sub) sub.style.color = subColor
-        if (ico) ico.style.background = cfg.iconBg
+        el.style.transform = 'translateY(0)'
+        el.style.boxShadow = shadow
       }}
     >
       <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between' }}>
         <div style={{ flex: 1 }}>
-          <p className="stat-label" style={{
+          <p style={{
             fontSize: '11px', color: labelColor,
             textTransform: 'uppercase', letterSpacing: '0.08em',
-            fontWeight: 600, marginBottom: '8px', transition: 'color 0.3s',
+            fontWeight: 600, marginBottom: '8px',
           }}>
             {title}
           </p>
-          <p className="stat-value" style={{
+          <p style={{
             fontSize: '3rem', fontWeight: 800, lineHeight: 1,
-            color: cfg.valueColor, marginBottom: '6px', transition: 'color 0.3s',
+            color: cfg.valueColor, marginBottom: '6px',
           }}>
             {value}
           </p>
           {subtitle && (
-            <p className="stat-sub" style={{
+            <p style={{
               fontSize: '12px', color: subColor, marginTop: '4px',
               overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-              transition: 'color 0.3s',
             }}>
               {subtitle}
             </p>
           )}
         </div>
         {Icon && (
-          <div className="stat-icon" style={{
+          <div style={{
             padding: '10px', borderRadius: '12px',
-            background: cfg.iconBg, flexShrink: 0, transition: 'background 0.3s',
+            background: cfg.iconBg, flexShrink: 0,
           }}>
             <Icon size={22} style={{ color: cfg.iconColor }} />
           </div>

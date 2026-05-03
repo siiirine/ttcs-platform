@@ -189,7 +189,10 @@
 }
 .gradient-border:hover::before { opacity: 1; }
 .gradient-border-active::before { opacity: 1; animation: gradient-rotate 4s linear infinite; }
-
+.gradient-border > * {
+  position: relative;
+  z-index: 1;
+}
 @keyframes gradient-rotate {
   0%   { background: linear-gradient(0deg,   #0066cc, #00cc88, #aa00ff); }
   25%  { background: linear-gradient(90deg,  #0066cc, #00cc88, #aa00ff); }

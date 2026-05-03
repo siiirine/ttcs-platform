@@ -9,29 +9,23 @@ import { Panel } from '@/components/dashboard/panel'
 import { StatusBadge } from '@/components/dashboard/status-badge'
 import { RoleBadge } from '@/components/dashboard/role-badge'
 import {
-  Server,
-  AlertTriangle,
-  AlertCircle,
-  CheckCircle,
-  Zap,
-  ArrowRight,
-  Activity,
-  TrendingUp,
-  MessageSquare,
-  Database,
-  ExternalLink,
+  Server, AlertTriangle, AlertCircle, CheckCircle,
+  Zap, ArrowRight, Activity, TrendingUp,
+  MessageSquare, Database, ExternalLink,
 } from 'lucide-react'
 import type { SummaryResponse, CorrelationResponse, Anomaly } from '@/lib/api'
 import { api } from '@/lib/api'
 
+const go = (path: string) => { window.location.href = path }
+
 export default function DashboardPage() {
-  const [summary, setSummary] = useState<SummaryResponse | null>(null)
+  const [summary, setSummary]         = useState<SummaryResponse | null>(null)
   const [correlation, setCorrelation] = useState<CorrelationResponse | null>(null)
-  const [anomalies, setAnomalies] = useState<Anomaly[]>([])
-  const [isLoading, setIsLoading] = useState(true)
+  const [anomalies, setAnomalies]     = useState<Anomaly[]>([])
+  const [isLoading, setIsLoading]     = useState(true)
   const [isRefreshing, setIsRefreshing] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-  const [lastUpdate, setLastUpdate] = useState<string>('')
+  const [error, setError]             = useState<string | null>(null)
+  const [lastUpdate, setLastUpdate]   = useState<string>('')
 
   const fetchData = useCallback(async () => {
     try {
@@ -55,14 +49,9 @@ export default function DashboardPage() {
 
   const handleRefresh = async () => {
     setIsRefreshing(true)
-    try {
-      await api.refresh()
-      await fetchData()
-    } catch (err) {
-      console.error('Refresh error:', err)
-    } finally {
-      setIsRefreshing(false)
-    }
+    try { await api.refresh(); await fetchData() }
+    catch (err) { console.error('Refresh error:', err) }
+    finally { setIsRefreshing(false) }
   }
 
   useEffect(() => {
@@ -99,10 +88,7 @@ export default function DashboardPage() {
             </div>
             <h2 className="text-xl font-heading font-bold text-foreground mb-2">Erreur de connexion</h2>
             <p className="text-muted-foreground mb-6">{error}</p>
-            <button
-              onClick={fetchData}
-              className="px-6 py-3 rounded-xl bg-gradient-to-r from-primary to-accent text-white font-semibold hover:opacity-90 transition-opacity"
-            >
+            <button onClick={fetchData} className="px-6 py-3 rounded-xl bg-gradient-to-r from-primary to-accent text-white font-semibold hover:opacity-90 transition-opacity">
               Réessayer
             </button>
           </div>
@@ -114,41 +100,19 @@ export default function DashboardPage() {
   return (
     <DashboardLayout>
       <Topbar onRefresh={handleRefresh} isRefreshing={isRefreshing} lastUpdate={lastUpdate} />
-      
+
       <div className="p-6 space-y-6">
+
         {/* Stats Row */}
         <div className="grid grid-cols-4 gap-4">
-          <StatCard
-            title="Total Noeuds"
-            value={summary?.total_nodes ?? 0}
-            icon={Server}
-            variant="default"
-          />
-          <StatCard
-            title="Critiques"
-            value={summary?.CRITICAL ?? 0}
-            subtitle={summary?.critical_nodes.join(', ') || 'Aucun'}
-            icon={AlertCircle}
-            variant="critical"
-          />
-          <StatCard
-            title="Avertissements"
-            value={summary?.WARNING ?? 0}
-            subtitle={summary?.warning_nodes.join(', ') || 'Aucun'}
-            icon={AlertTriangle}
-            variant="warning"
-          />
-          <StatCard
-            title="Normaux"
-            value={summary?.NORMAL ?? 0}
-            icon={CheckCircle}
-            variant="success"
-          />
+          <StatCard title="Total Noeuds"   value={summary?.total_nodes ?? 0} icon={Server}       variant="default"  />
+          <StatCard title="Critiques"       value={summary?.CRITICAL ?? 0}    icon={AlertCircle}  variant="critical" subtitle={summary?.critical_nodes.join(', ') || 'Aucun'} />
+          <StatCard title="Avertissements" value={summary?.WARNING ?? 0}     icon={AlertTriangle} variant="warning"  subtitle={summary?.warning_nodes.join(', ') || 'Aucun'} />
+          <StatCard title="Normaux"         value={summary?.NORMAL ?? 0}      icon={CheckCircle}  variant="success"  />
         </div>
 
-        {/* Correlation and Impact Section */}
+        {/* Correlation */}
         <div className="grid grid-cols-3 gap-4">
-          {/* Cause Probable - Highlighted */}
           <Panel title="Cause probable" icon={AlertTriangle} variant="warning" className="col-span-1">
             <div className="flex items-start gap-3">
               <p className="text-lg font-medium text-foreground leading-relaxed">
@@ -157,18 +121,17 @@ export default function DashboardPage() {
             </div>
           </Panel>
 
-          {/* Impact Chain */}
           <Panel title="Chaîne d&apos;impact" icon={ArrowRight} className="col-span-1">
             {correlation?.chaine_impact && correlation.chaine_impact.length > 0 ? (
               <div className="flex items-center gap-2 flex-wrap">
                 {correlation.chaine_impact.map((node, index) => (
                   <div key={node} className="flex items-center gap-2">
-                    <Link
-                      href={`/noeuds/${node.split(' ')[0]}`}
-                      className="px-3 py-2 rounded-lg bg-[#ff3b5c]/20 text-[#ff3b5c] font-semibold hover:bg-[#ff3b5c]/30 transition-all hover:scale-105"
+                    <button
+                      onClick={() => go(`/noeuds/${node.split(' ')[0]}`)}
+                      className="px-3 py-2 rounded-lg bg-[#ff3b5c]/20 text-[#ff3b5c] font-semibold hover:bg-[#ff3b5c]/30 transition-all hover:scale-105 cursor-pointer border-0"
                     >
                       {node}
-                    </Link>
+                    </button>
                     {index < correlation.chaine_impact.length - 1 && (
                       <ArrowRight className="h-4 w-4 text-muted-foreground" />
                     )}
@@ -180,19 +143,18 @@ export default function DashboardPage() {
             )}
           </Panel>
 
-          {/* Impacted Nodes */}
           <Panel title="Noeuds impactés" icon={Server} className="col-span-1">
             <div className="flex flex-wrap gap-2">
               {correlation?.noeuds_impactes && correlation.noeuds_impactes.length > 0 ? (
-                correlation.noeuds_impactes.map((node) => (
-                  <Link
+                correlation.noeuds_impactes.map(node => (
+                  <button
                     key={node}
-                    href={`/noeuds/${node}`}
-                    className="px-3 py-2 rounded-lg glass-card border border-primary/30 text-foreground font-medium hover:border-primary/60 transition-all hover:scale-105 flex items-center gap-1.5"
+                    onClick={() => go(`/noeuds/${node}`)}
+                    className="px-3 py-2 rounded-lg glass-card border border-primary/30 text-foreground font-medium hover:border-primary/60 transition-all hover:scale-105 flex items-center gap-1.5 cursor-pointer"
                   >
                     {node}
                     <ExternalLink className="h-3 w-3 text-primary" />
-                  </Link>
+                  </button>
                 ))
               ) : (
                 <p className="text-muted-foreground">Aucun noeud impacté</p>
@@ -201,35 +163,29 @@ export default function DashboardPage() {
           </Panel>
         </div>
 
-        {/* Anomalies and Quick Actions */}
+        {/* Anomalies + Actions */}
         <div className="grid grid-cols-3 gap-4">
-          {/* Recent Anomalies */}
+
+          {/* Anomalies */}
           <Panel title="Anomalies récentes" icon={Activity} className="col-span-2">
             {anomalies.length > 0 ? (
               <div className="space-y-3 max-h-[400px] overflow-y-auto pr-2">
                 {anomalies.map((anomaly, index) => (
                   <div
                     key={`${anomaly.rule_id}-${index}`}
+                    onClick={() => go(`/noeuds/${anomaly.node}`)}
+                    style={{ cursor: 'pointer' }}
                     className={`flex items-start gap-3 p-4 rounded-xl glass-card transition-all hover:scale-[1.01] ${
-                      anomaly.severity === 'CRITICAL' 
-                        ? 'border-glow-critical' 
-                        : 'border-glow-warning'
+                      anomaly.severity === 'CRITICAL' ? 'border-glow-critical' : 'border-glow-warning'
                     }`}
                   >
                     <StatusBadge status={anomaly.severity} size="sm" />
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 mb-1">
                         <RoleBadge role={anomaly.role} size="sm" />
-                        <Link
-                          href={`/noeuds/${anomaly.node}`}
-                          className="font-semibold text-foreground hover:text-primary transition-colors"
-                        >
-                          {anomaly.node}
-                        </Link>
+                        <span className="font-semibold text-foreground">{anomaly.node}</span>
                       </div>
-                      <p className="text-sm text-muted-foreground truncate">
-                        {anomaly.message}
-                      </p>
+                      <p className="text-sm text-muted-foreground truncate">{anomaly.message}</p>
                       <p className="text-xs text-muted-foreground mt-1">
                         Valeur: <span className="text-foreground font-medium">{anomaly.value}</span> (seuil: {anomaly.threshold})
                       </p>
@@ -247,11 +203,12 @@ export default function DashboardPage() {
             )}
           </Panel>
 
-          {/* Quick Actions */}
-          <Panel title="Actions rapides" icon={Zap} variant="gradient" className="col-span-1">
+          {/* Actions rapides */}
+          <Panel title="Actions rapides" icon={Zap} variant="default" className="col-span-1">
             <div className="space-y-3">
-              <Link
-                href="/noeuds"
+              <div
+                onClick={() => go('/noeuds')}
+                style={{ cursor: 'pointer' }}
                 className="flex items-center gap-3 p-4 rounded-xl glass-card border border-border/50 hover:border-primary/50 transition-all group hover:scale-[1.02]"
               >
                 <div className="p-2.5 rounded-lg bg-primary/20 group-hover:bg-primary/30 transition-colors">
@@ -262,10 +219,11 @@ export default function DashboardPage() {
                   <p className="text-sm text-muted-foreground">État de tous les serveurs</p>
                 </div>
                 <ArrowRight className="h-4 w-4 text-muted-foreground group-hover:text-primary group-hover:translate-x-1 transition-all" />
-              </Link>
+              </div>
 
-              <Link
-                href="/inventaire"
+              <div
+                onClick={() => go('/inventaire')}
+                style={{ cursor: 'pointer' }}
                 className="flex items-center gap-3 p-4 rounded-xl glass-card border border-border/50 hover:border-[#a855f7]/50 transition-all group hover:scale-[1.02]"
               >
                 <div className="p-2.5 rounded-lg bg-[#a855f7]/20 group-hover:bg-[#a855f7]/30 transition-colors">
@@ -276,10 +234,11 @@ export default function DashboardPage() {
                   <p className="text-sm text-muted-foreground">Configuration système</p>
                 </div>
                 <ArrowRight className="h-4 w-4 text-muted-foreground group-hover:text-[#a855f7] group-hover:translate-x-1 transition-all" />
-              </Link>
+              </div>
 
-              <Link
-                href="/prediction"
+              <div
+                onClick={() => go('/prediction')}
+                style={{ cursor: 'pointer' }}
                 className="flex items-center gap-3 p-4 rounded-xl glass-card border border-border/50 hover:border-accent/50 transition-all group hover:scale-[1.02]"
               >
                 <div className="p-2.5 rounded-lg bg-accent/20 group-hover:bg-accent/30 transition-colors">
@@ -290,10 +249,11 @@ export default function DashboardPage() {
                   <p className="text-sm text-muted-foreground">Analyse prédictive SDP</p>
                 </div>
                 <ArrowRight className="h-4 w-4 text-muted-foreground group-hover:text-accent group-hover:translate-x-1 transition-all" />
-              </Link>
+              </div>
 
-              <Link
-                href="/assistant"
+              <div
+                onClick={() => go('/assistant')}
+                style={{ cursor: 'pointer' }}
                 className="flex items-center gap-3 p-4 rounded-xl glass-card border border-border/50 hover:border-[#ffb020]/50 transition-all group hover:scale-[1.02]"
               >
                 <div className="p-2.5 rounded-lg bg-[#ffb020]/20 group-hover:bg-[#ffb020]/30 transition-colors">
@@ -304,12 +264,12 @@ export default function DashboardPage() {
                   <p className="text-sm text-muted-foreground">Chatbot intelligent</p>
                 </div>
                 <ArrowRight className="h-4 w-4 text-muted-foreground group-hover:text-[#ffb020] group-hover:translate-x-1 transition-all" />
-              </Link>
+              </div>
             </div>
           </Panel>
         </div>
 
-        {/* Summary Stats Bar */}
+        {/* Summary Bar */}
         <div className="glass-card gradient-border rounded-xl p-5">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-8">
@@ -341,6 +301,7 @@ export default function DashboardPage() {
             </div>
           </div>
         </div>
+
       </div>
     </DashboardLayout>
   )

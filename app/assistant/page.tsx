@@ -1,11 +1,10 @@
 'use client'
 
-import { useState, useRef, useEffect } from 'react'
+import { useState, useRef, useEffect, useCallback } from 'react'
 import { DashboardLayout } from '@/components/dashboard/dashboard-layout'
 import { Topbar } from '@/components/dashboard/topbar'
 import { useThemeColors } from '@/lib/use-theme-colors'
-import { Send, Bot, User, Loader2, Lightbulb, Sparkles } from 'lucide-react'
-import { KNOWN_NODES } from '@/lib/api'
+import { Send, Bot, User, Loader2, History, Plus, Clock } from 'lucide-react'
 
 const API_BASE = 'http://192.168.147.129:8000'
 
@@ -16,18 +15,14 @@ interface Message {
   timestamp: Date
 }
 
-const EXAMPLE_QUERIES = [
-  "quel est l'état du système ?",
-  "état de jambala",
-  "anomalies ttsdp17a",
-  "quelle est la cause probable ?",
-  "quel est le risque de dégradation CIP ?",
-  "résumé global du système",
-  "compare les nœuds critiques",
-  "que faire pour résoudre les problèmes ?",
-]
+interface HistoryItem {
+  question: string
+  reponse: string
+  created_at: string
+}
 
-// ✅ Lit le username depuis le cookie ttcs_user
+const WELCOME_MSG = `👋 Bonjour ! Je suis TTCS Assistant.\nComment puis-je vous aider ?`
+
 function getUsername(): string {
   try {
     const cookies = document.cookie.split(';')
@@ -42,38 +37,90 @@ function getUsername(): string {
   return 'admin'
 }
 
-// ✅ Lit le token JWT depuis le cookie ttcs_token
 function getToken(): string {
   try {
     const cookies = document.cookie.split(';')
     for (const cookie of cookies) {
       const [name, value] = cookie.trim().split('=')
-      if (name === 'ttcs_token') {
-        return decodeURIComponent(value)
-      }
+      if (name === 'ttcs_token') return decodeURIComponent(value)
     }
   } catch { }
   return ''
 }
 
+function formatRelativeTime(dateStr: string): string {
+  const date = new Date(dateStr)
+  const now   = new Date()
+  const diff  = now.getTime() - date.getTime()
+  const mins  = Math.floor(diff / 60000)
+  const hours = Math.floor(diff / 3600000)
+  const days  = Math.floor(diff / 86400000)
+  if (mins < 1)   return "À l'instant"
+  if (mins < 60)  return `Il y a ${mins} min`
+  if (hours < 24) return `Il y a ${hours}h`
+  if (days < 7)   return `Il y a ${days}j`
+  return date.toLocaleDateString('fr-FR')
+}
+
 export default function AssistantPage() {
   const c = useThemeColors()
-  const [messages, setMessages] = useState<Message[]>([{
-    id: '1', role: 'assistant', timestamp: new Date(),
-    content: `👋 Bonjour ! Je suis **TTCS Assistant**, propulsé par l'IA Groq (LLaMA 3.3 70B).\n\nJe suis connecté en temps réel au système Ericsson Charging System de Tunisie Telecom.\n\nJe peux vous aider avec :\n- 🔍 **État des nœuds** — "état de jambala"\n- ⚠️ **Anomalies** — "anomalies ttsdp17a"\n- 🔗 **Corrélation** — "quelle est la cause probable ?"\n- 📊 **Prédiction CIP** — "quel est le risque ?"\n- 💡 **Recommandations** — "que faire pour résoudre ?"\n- 📋 **Résumé global** — "état général du système"\n\nPosez votre question en français !`,
-  }])
-  const [input, setInput] = useState('')
-  const [isLoading, setIsLoading] = useState(false)
-  const [groqHistory, setGroqHistory] = useState<Array<{role: string, content: string}>>([])
+
+  const initMessages = (): Message[] => [{
+    id: '1', role: 'assistant', timestamp: new Date(), content: WELCOME_MSG,
+  }]
+
+  const [messages, setMessages]       = useState<Message[]>(initMessages)
+  const [input, setInput]             = useState('')
+  const [isLoading, setIsLoading]     = useState(false)
+  const [groqHistory, setGroqHistory] = useState<Array<{ role: string; content: string }>>([])
+  const [history, setHistory]         = useState<HistoryItem[]>([])
+  const [loadingHistory, setLoadingHistory] = useState(false)
+  const [activeHistory, setActiveHistory]   = useState<number | null>(null)
   const messagesEndRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => { messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' }) }, [messages])
 
+  const fetchHistory = useCallback(async () => {
+    setLoadingHistory(true)
+    try {
+      const username = getUsername()
+      const token    = getToken()
+      const res = await fetch(`${API_BASE}/chat/history/${username}?limit=30`, {
+        headers: { Authorization: `Bearer ${token}` },
+      })
+      const data = await res.json()
+      if (res.ok) setHistory(data.history || [])
+    } catch { }
+    finally { setLoadingHistory(false) }
+  }, [])
+
+  useEffect(() => { fetchHistory() }, [fetchHistory])
+
+  const loadFromHistory = (item: HistoryItem, index: number) => {
+    setActiveHistory(index)
+    setMessages([
+      { id: '1',  role: 'assistant', timestamp: new Date(),               content: WELCOME_MSG },
+      { id: '2u', role: 'user',      timestamp: new Date(item.created_at), content: item.question },
+      { id: '2a', role: 'assistant', timestamp: new Date(item.created_at), content: item.reponse },
+    ])
+    setGroqHistory([
+      { role: 'user',      content: item.question },
+      { role: 'assistant', content: item.reponse },
+    ])
+  }
+
+  const newConversation = () => {
+    setActiveHistory(null)
+    setMessages(initMessages())
+    setGroqHistory([])
+  }
+
   const handleSend = async () => {
     if (!input.trim() || isLoading) return
+    setActiveHistory(null)
     const userMessage: Message = {
       id: Date.now().toString(), role: 'user',
-      content: input.trim(), timestamp: new Date()
+      content: input.trim(), timestamp: new Date(),
     }
     setMessages(prev => [...prev, userMessage])
     const question = input.trim()
@@ -82,41 +129,32 @@ export default function AssistantPage() {
 
     try {
       const token = getToken()
-
       const res = await fetch(`${API_BASE}/chat`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          // ✅ FIX : token JWT injecté — sans ça → 401 Unauthorized
           ...(token ? { Authorization: `Bearer ${token}` } : {}),
         },
-        body: JSON.stringify({
-          question,
-          history: groqHistory.slice(-6),
-          username: getUsername()
-        }),
+        body: JSON.stringify({ question, history: groqHistory.slice(-6), username: getUsername() }),
       })
-
       const data = await res.json()
       if (!res.ok) throw new Error(data.detail || 'Erreur API')
 
       setGroqHistory(prev => [
         ...prev,
-        { role: 'user', content: question },
-        { role: 'assistant', content: data.reponse }
+        { role: 'user',      content: question },
+        { role: 'assistant', content: data.reponse },
       ])
       setMessages(prev => [...prev, {
-        id: (Date.now() + 1).toString(),
-        role: 'assistant',
-        content: data.reponse,
-        timestamp: new Date()
+        id: (Date.now() + 1).toString(), role: 'assistant',
+        content: data.reponse, timestamp: new Date(),
       }])
+      fetchHistory()
     } catch {
       setMessages(prev => [...prev, {
-        id: (Date.now() + 1).toString(),
-        role: 'assistant',
-        content: "❌ Erreur de connexion au serveur. Vérifiez que l'API est démarrée sur 192.168.147.129:8000",
-        timestamp: new Date()
+        id: (Date.now() + 1).toString(), role: 'assistant',
+        content: "❌ Erreur de connexion au serveur.",
+        timestamp: new Date(),
       }])
     } finally {
       setIsLoading(false)
@@ -128,18 +166,15 @@ export default function AssistantPage() {
       <Topbar />
       <div style={{ height: 'calc(100vh - 64px)', display: 'flex' }}>
 
-        {/* Chat Area */}
-        <div style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
+        {/* ── CENTER : Zone de chat ── */}
+        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0 }}>
 
           {/* Header */}
           <div style={{ padding: '16px 24px', borderBottom: `1px solid ${c.borderSubtle}`, background: c.headerBg, display: 'flex', alignItems: 'center', gap: '12px', transition: 'background 0.3s' }}>
             <div style={{ width: '40px', height: '40px', borderRadius: '12px', background: 'linear-gradient(135deg, #0055cc, #0082f0)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
               <Bot size={20} style={{ color: 'white' }} />
             </div>
-            <div>
-              <h2 style={{ fontSize: '15px', fontWeight: 700, color: c.textPrimary }}>TTCS Assistant</h2>
-              <p style={{ fontSize: '12px', color: c.textSecondary }}>Propulsé par Groq LLaMA 3.3 70B • Données en temps réel</p>
-            </div>
+            <h2 style={{ fontSize: '15px', fontWeight: 700, color: c.textPrimary }}>TTCS Assistant</h2>
             <div style={{ marginLeft: 'auto', padding: '4px 12px', borderRadius: '20px', background: 'rgba(16,185,129,0.1)', border: '1px solid rgba(16,185,129,0.3)', fontSize: '12px', color: '#10b981', fontWeight: 500, display: 'flex', alignItems: 'center', gap: '6px' }}>
               <div style={{ width: '6px', height: '6px', borderRadius: '50%', background: '#10b981' }} /> En ligne
             </div>
@@ -148,8 +183,7 @@ export default function AssistantPage() {
           {/* Messages */}
           <div style={{ flex: 1, overflowY: 'auto', padding: '24px', display: 'flex', flexDirection: 'column', gap: '16px' }}>
             {messages.map(message => (
-              <MessageBubble
-                key={message.id} message={message}
+              <MessageBubble key={message.id} message={message}
                 cardBg={c.cardBg} textPrimary={c.textPrimary}
                 textSecondary={c.textSecondary} border={c.border}
               />
@@ -180,64 +214,87 @@ export default function AssistantPage() {
                 onFocus={e => (e.target.style.borderColor = '#0082f0')}
                 onBlur={e => (e.target.style.borderColor = c.borderInput)}
               />
-              <button
-                onClick={handleSend}
-                disabled={!input.trim() || isLoading}
-                style={{ padding: '13px 24px', borderRadius: '12px', border: 'none', background: !input.trim() || isLoading ? 'rgba(0,130,240,0.3)' : 'linear-gradient(135deg, #0055cc, #0082f0)', color: 'white', fontWeight: 700, cursor: !input.trim() || isLoading ? 'not-allowed' : 'pointer', display: 'flex', alignItems: 'center', gap: '8px', fontSize: '14px' }}
-              >
+              <button onClick={handleSend} disabled={!input.trim() || isLoading} style={{
+                padding: '13px 24px', borderRadius: '12px', border: 'none',
+                background: !input.trim() || isLoading ? 'rgba(0,130,240,0.3)' : 'linear-gradient(135deg, #0055cc, #0082f0)',
+                color: 'white', fontWeight: 700,
+                cursor: !input.trim() || isLoading ? 'not-allowed' : 'pointer',
+                display: 'flex', alignItems: 'center', gap: '8px', fontSize: '14px',
+              }}>
                 <Send size={16} /> Envoyer
               </button>
             </div>
           </div>
         </div>
 
-        {/* Right Sidebar */}
-        <div style={{ width: '300px', flexShrink: 0, borderLeft: `1px solid ${c.borderSubtle}`, background: c.sidebarRightBg, padding: '20px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '20px', transition: 'background 0.3s' }}>
-
-          <div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '12px' }}>
-              <div style={{ padding: '6px', borderRadius: '8px', background: 'rgba(245,158,11,0.12)' }}>
-                <Lightbulb size={14} style={{ color: '#f59e0b' }} />
+        {/* ── RIGHT : Historique ── */}
+        <div style={{
+          width: '280px', flexShrink: 0,
+          borderLeft: `1px solid ${c.borderSubtle}`,
+          background: c.sidebarRightBg,
+          display: 'flex', flexDirection: 'column',
+          transition: 'background 0.3s',
+        }}>
+          {/* Header historique */}
+          <div style={{ padding: '16px', borderBottom: `1px solid ${c.borderSubtle}` }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '10px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <History size={15} style={{ color: '#0082f0' }} />
+                <span style={{ fontSize: '13px', fontWeight: 700, color: c.textPrimary }}>Historique</span>
               </div>
-              <h3 style={{ fontSize: '13px', fontWeight: 700, color: c.textPrimary }}>Exemples de questions</h3>
+              <span style={{ fontSize: '10px', color: c.textSecondary, background: 'rgba(0,130,240,0.1)', padding: '2px 7px', borderRadius: '999px', fontWeight: 600 }}>
+                {history.length}
+              </span>
             </div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-              {EXAMPLE_QUERIES.map((query, i) => (
-                <button key={i} onClick={() => setInput(query)}
-                  style={{ padding: '10px 12px', borderRadius: '10px', background: c.panelBg, border: `1px solid ${c.border}`, color: c.textSecondary, fontSize: '12px', textAlign: 'left', cursor: 'pointer', transition: 'all 0.2s' }}
-                  onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = 'rgba(0,130,240,0.1)'; (e.currentTarget as HTMLElement).style.color = c.textPrimary }}
-                  onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = c.panelBg; (e.currentTarget as HTMLElement).style.color = c.textSecondary }}
-                >
-                  &ldquo;{query}&rdquo;
-                </button>
-              ))}
-            </div>
+            <button onClick={newConversation} style={{
+              width: '100%', padding: '8px 12px', borderRadius: '8px',
+              background: 'linear-gradient(135deg, #0055cc, #0082f0)',
+              color: 'white', border: 'none', fontSize: '12px', fontWeight: 600,
+              cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px',
+            }}>
+              <Plus size={13} /> Nouvelle conversation
+            </button>
           </div>
 
-          <div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '12px' }}>
-              <div style={{ padding: '6px', borderRadius: '8px', background: 'rgba(0,130,240,0.1)' }}>
-                <Sparkles size={14} style={{ color: '#0082f0' }} />
+          {/* Liste */}
+          <div style={{ flex: 1, overflowY: 'auto', padding: '8px' }}>
+            {loadingHistory ? (
+              <div style={{ textAlign: 'center', padding: '20px', color: c.textSecondary, fontSize: '12px' }}>Chargement...</div>
+            ) : history.length === 0 ? (
+              <div style={{ textAlign: 'center', padding: '24px 16px', color: c.textSecondary }}>
+                <History size={28} style={{ opacity: 0.3, marginBottom: '8px' }} />
+                <p style={{ fontSize: '12px', margin: 0 }}>Aucune conversation</p>
               </div>
-              <h3 style={{ fontSize: '13px', fontWeight: 700, color: c.textPrimary }}>Nœuds disponibles</h3>
-            </div>
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
-              {KNOWN_NODES.map(node => (
-                <button key={node} onClick={() => setInput(`état de ${node}`)}
-                  style={{ padding: '5px 10px', borderRadius: '8px', background: 'rgba(0,130,240,0.08)', border: `1px solid ${c.border}`, color: '#0082f0', fontSize: '11px', fontFamily: 'monospace', cursor: 'pointer', fontWeight: 600 }}
+            ) : (
+              history.map((item, i) => (
+                <button key={i} onClick={() => loadFromHistory(item, i)} style={{
+                  width: '100%', textAlign: 'left', padding: '10px 12px',
+                  borderRadius: '8px', marginBottom: '4px', border: 'none',
+                  background: activeHistory === i ? 'rgba(0,130,240,0.12)' : 'transparent',
+                  cursor: 'pointer', transition: 'all 0.15s',
+                  borderLeft: activeHistory === i ? '3px solid #0082f0' : '3px solid transparent',
+                }}
+                  onMouseEnter={e => { if (activeHistory !== i) (e.currentTarget as HTMLElement).style.background = 'rgba(0,130,240,0.06)' }}
+                  onMouseLeave={e => { if (activeHistory !== i) (e.currentTarget as HTMLElement).style.background = 'transparent' }}
                 >
-                  {node}
+                  <p style={{ fontSize: '12px', fontWeight: 500, color: c.textPrimary, margin: '0 0 3px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    {item.question}
+                  </p>
+                  <p style={{ fontSize: '11px', color: c.textSecondary, margin: '0 0 4px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    {item.reponse.replace(/\*\*/g, '').substring(0, 55)}...
+                  </p>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                    <Clock size={10} style={{ color: c.textSecondary, opacity: 0.6 }} />
+                    <span style={{ fontSize: '10px', color: c.textSecondary, opacity: 0.7 }}>
+                      {formatRelativeTime(item.created_at)}
+                    </span>
+                  </div>
                 </button>
-              ))}
-            </div>
-          </div>
-
-          <div style={{ padding: '12px', borderRadius: '10px', background: c.panelBg, border: `1px solid ${c.border}` }}>
-            <p style={{ fontSize: '11px', color: c.textSecondary, lineHeight: 1.6 }}>
-              💡 L'assistant mémorise le contexte de la conversation. Vous pouvez poser des questions de suivi sans répéter les informations.
-            </p>
+              ))
+            )}
           </div>
         </div>
+
       </div>
       <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
     </DashboardLayout>
@@ -266,7 +323,7 @@ function MessageBubble({ message, cardBg, textPrimary, textSecondary, border }: 
       <div style={{ width: '36px', height: '36px', borderRadius: '12px', flexShrink: 0, background: isAssistant ? 'rgba(0,130,240,0.1)' : 'rgba(168,85,247,0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center', border: `1px solid ${border}` }}>
         {isAssistant ? <Bot size={18} style={{ color: '#0082f0' }} /> : <User size={18} style={{ color: '#a855f7' }} />}
       </div>
-      <div style={{ maxWidth: '72%', padding: '14px 18px', borderRadius: isAssistant ? '4px 16px 16px 16px' : '16px 4px 16px 16px', background: isAssistant ? cardBg : 'linear-gradient(135deg, #0055cc, #0082f0)', border: isAssistant ? `1px solid ${border}` : 'none', boxShadow: '0 2px 8px rgba(0,0,0,0.08)' }}>
+      <div style={{ maxWidth: '75%', padding: '14px 18px', borderRadius: isAssistant ? '4px 16px 16px 16px' : '16px 4px 16px 16px', background: isAssistant ? cardBg : 'linear-gradient(135deg, #0055cc, #0082f0)', border: isAssistant ? `1px solid ${border}` : 'none', boxShadow: '0 2px 8px rgba(0,0,0,0.08)' }}>
         <div style={{ fontSize: '14px', lineHeight: 1.6, color: isAssistant ? textPrimary : 'white', whiteSpace: 'pre-wrap' }}>
           {renderContent(message.content)}
         </div>

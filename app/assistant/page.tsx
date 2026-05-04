@@ -327,7 +327,7 @@ function MessageBubble({ message, cardBg, textPrimary, textSecondary, border }: 
         <div style={{ fontSize: '14px', lineHeight: 1.6, color: isAssistant ? textPrimary : 'white', whiteSpace: 'pre-wrap' }}>
           {renderContent(message.content)}
         </div>
-        <p style={{ fontSize: '11px', marginTop: '8px', color: isAssistant ? textSecondary : 'rgba(255,255,255,0.7)' }}>
+        <p suppressHydrationWarning style={{ fontSize: '11px', marginTop: '8px', color: isAssistant ? textSecondary : 'rgba(255,255,255,0.7)' }}>
           {message.timestamp.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}
         </p>
       </div>

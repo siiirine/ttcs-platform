@@ -6,7 +6,7 @@ import { DashboardLayout } from '@/components/dashboard/dashboard-layout'
 import { adminApi, User, NodeAdmin } from '@/lib/api'
 import {
   Users, Server, Plus, Trash2,
-  KeyRound, RefreshCw, ShieldCheck, Eye, EyeOff, Pencil,
+  KeyRound, RefreshCw, ShieldCheck, Eye, EyeOff, Pencil, Clock, X,
 } from 'lucide-react'
 
 const ROLES = ['CCN', 'AIR', 'SDP', 'VS', 'OCC', 'AF']
@@ -30,6 +30,18 @@ function isValidEmail(email: string): boolean {
 }
 const EMAIL_HINT  = 'Adresse @ericsson.com ou @tunisietelecom.com'
 const EMAIL_ERROR = 'L\'email doit terminer par @ericsson.com ou @tunisietelecom.com'
+
+// ✅ Calcule le statut d'expiration
+function getExpiryStatus(expires_at: string | null): { label: string; color: string; bg: string } {
+  if (!expires_at) return { label: 'Illimité', color: '#00d4aa', bg: 'rgba(0,212,170,0.12)' }
+  const exp = new Date(expires_at)
+  const now = new Date()
+  const diff = exp.getTime() - now.getTime()
+  if (diff <= 0) return { label: 'Expiré', color: '#ef4444', bg: 'rgba(239,68,68,0.12)' }
+  const days = Math.ceil(diff / 86400000)
+  if (days <= 7) return { label: `${days}j restant${days > 1 ? 's' : ''}`, color: '#f59e0b', bg: 'rgba(245,158,11,0.12)' }
+  return { label: exp.toLocaleDateString('fr-FR'), color: '#0082f0', bg: 'rgba(0,130,240,0.1)' }
+}
 
 function Badge({ role }: { role: string }) {
   const c = roleColor[role] || '#6b7280'
@@ -137,6 +149,12 @@ export default function AdminPage() {
   const [showNewPwd, setShowNewPwd] = useState(false)
   const [savingPwd, setSavingPwd] = useState(false)
 
+  // ✅ Expiration
+  const [expiryTarget, setExpiryTarget] = useState<User | null>(null)
+  const [expiryDate, setExpiryDate]     = useState('')   // format: YYYY-MM-DDTHH:MM
+  const [savingExpiry, setSavingExpiry] = useState(false)
+  const [expiryErr, setExpiryErr]       = useState('')
+
   // Create node
   const [showCreateNode, setShowCreateNode] = useState(false)
   const [newNode, setNewNode] = useState({ name: '', role: 'CCN', description: '', ip_address: '', server_type: '', port: '' })
@@ -145,13 +163,12 @@ export default function AdminPage() {
   const [savingNode, setSavingNode] = useState(false)
   const [nodeErr, setNodeErr] = useState('')
 
-  // ✅ Edit node
+  // Edit node
   const [editNode, setEditNode] = useState<NodeAdmin | null>(null)
   const [editNodeForm, setEditNodeForm] = useState({ role: '', description: '', ip_address: '', server_type: '', port: '' })
   const [savingEditNode, setSavingEditNode] = useState(false)
   const [editNodeErr, setEditNodeErr] = useState('')
 
-  // Validations live
   const createEmailErr = emailTouched && newUser.email && !isValidEmail(newUser.email) ? EMAIL_ERROR : ''
   const createRoleErr  = roleTouched && !newUser.role ? 'Le rôle est obligatoire' : ''
   const ipErr          = ipTouched && !newNode.ip_address.trim() ? 'L\'adresse IP est obligatoire' : ''
@@ -172,7 +189,6 @@ export default function AdminPage() {
   }
   useEffect(() => { fetchUsers(); fetchNodes() }, [])
 
-  // ── Handlers users ──
   const handleCreate = async () => {
     setCreateErr('')
     if (!newUser.username || !newUser.password) { setCreateErr('Username et mot de passe requis'); return }
@@ -216,7 +232,31 @@ export default function AdminPage() {
     finally { setSavingPwd(false) }
   }
 
-  // ── Handlers nodes ──
+  // ✅ Ouvrir modal expiration — pré-remplir avec la date actuelle si elle existe
+  const openExpiry = (u: User) => {
+    setExpiryTarget(u)
+    setExpiryErr('')
+    if (u.expires_at) {
+      // Format pour input datetime-local : YYYY-MM-DDTHH:MM
+      const d = new Date(u.expires_at)
+      const pad = (n: number) => String(n).padStart(2, '0')
+      setExpiryDate(`${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`)
+    } else {
+      setExpiryDate('')
+    }
+  }
+
+  const handleSetExpiry = async () => {
+    if (!expiryTarget) return
+    setSavingExpiry(true); setExpiryErr('')
+    try {
+      await adminApi.setExpiry(expiryTarget.id, expiryDate ? new Date(expiryDate).toISOString() : null)
+      showToast(expiryDate ? `Expiration définie pour "${expiryTarget.username}"` : `Expiration supprimée pour "${expiryTarget.username}"`)
+      setExpiryTarget(null); fetchUsers()
+    } catch (e) { setExpiryErr(e instanceof Error ? e.message : 'Erreur') }
+    finally { setSavingExpiry(false) }
+  }
+
   const handleCreateNode = async () => {
     setNodeErr('')
     if (!newNode.name || !newNode.description || !newNode.port) { setNodeErr('Nom, description et port requis'); return }
@@ -245,13 +285,7 @@ export default function AdminPage() {
     if (!editNodeForm.port) { setEditNodeErr('Le port est obligatoire'); return }
     setSavingEditNode(true)
     try {
-      await adminApi.updateNode(editNode.name, {
-        role:        editNodeForm.role,
-        description: editNodeForm.description,
-        ip_address:  editNodeForm.ip_address.trim(),
-        server_type: editNodeForm.server_type.trim(),
-        port:        parseInt(editNodeForm.port),
-      })
+      await adminApi.updateNode(editNode.name, { role: editNodeForm.role, description: editNodeForm.description, ip_address: editNodeForm.ip_address.trim(), server_type: editNodeForm.server_type.trim(), port: parseInt(editNodeForm.port) })
       showToast(`Noeud "${editNode.name}" modifié`); setEditNode(null); fetchNodes()
     } catch (e) { setEditNodeErr(e instanceof Error ? e.message : 'Erreur') }
     finally { setSavingEditNode(false) }
@@ -262,6 +296,9 @@ export default function AdminPage() {
     try { await adminApi.deleteNode(name); showToast(`Noeud "${name}" supprimé`); fetchNodes() }
     catch (e) { showToast(e instanceof Error ? e.message : 'Erreur', false) }
   }
+
+  // Date min pour datetime-local = maintenant
+  const minDate = new Date(Date.now() + 60000).toISOString().slice(0, 16)
 
   return (
     <DashboardLayout>
@@ -316,36 +353,55 @@ export default function AdminPage() {
               <table style={{ width: '100%', borderCollapse: 'collapse' }}>
                 <thead>
                   <tr style={{ borderBottom: `1px solid ${rowBorder}` }}>
-                    {['Utilisateur', 'Nom complet', 'Email', 'Rôle', 'Créé le', 'Dernière connexion', 'Actions'].map(h => (
+                    {['Utilisateur', 'Nom complet', 'Email', 'Rôle', 'Expiration', 'Dernière connexion', 'Actions'].map(h => (
                       <th key={h} style={{ padding: '10px 12px', textAlign: 'left', fontSize: '11px', fontWeight: 700, color: headCol, textTransform: 'uppercase', letterSpacing: '0.06em' }}>{h}</th>
                     ))}
                   </tr>
                 </thead>
                 <tbody>
-                  {users.map(u => (
-                    <tr key={u.id} style={{ borderBottom: `1px solid ${rowBorder}` }}
-                      onMouseEnter={e => (e.currentTarget as HTMLElement).style.background = rowHover}
-                      onMouseLeave={e => (e.currentTarget as HTMLElement).style.background = 'transparent'}>
-                      <td style={{ padding: '12px' }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                          <div style={{ width: '28px', height: '28px', borderRadius: '8px', background: 'rgba(0,130,240,0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '12px', fontWeight: 700, color: '#0082f0' }}>{u.username[0].toUpperCase()}</div>
-                          <span style={{ fontSize: '13px', fontWeight: 600, color: textCol }}>{u.username}</span>
-                        </div>
-                      </td>
-                      <td style={{ padding: '12px', fontSize: '13px', color: text2Col }}>{u.full_name || '—'}</td>
-                      <td style={{ padding: '12px', fontSize: '12px', color: text2Col, fontFamily: 'monospace' }}>{u.email || '—'}</td>
-                      <td style={{ padding: '12px' }}><RoleBadge role={u.role} /></td>
-                      <td style={{ padding: '12px', fontSize: '12px', color: subCol }}>{u.created_at ? new Date(u.created_at).toLocaleDateString('fr-FR') : '—'}</td>
-                      <td style={{ padding: '12px', fontSize: '12px', color: subCol }}>{u.last_login ? new Date(u.last_login).toLocaleString('fr-FR') : 'Jamais'}</td>
-                      <td style={{ padding: '12px' }}>
-                        <div style={{ display: 'flex', gap: '6px' }}>
-                          <button onClick={() => openEditUser(u)} title="Modifier" style={{ background: 'rgba(0,130,240,0.12)', border: '1px solid rgba(0,130,240,0.35)', borderRadius: '8px', padding: '6px 10px', cursor: 'pointer', display: 'flex', alignItems: 'center' }}><Pencil size={13} style={{ color: '#0082f0' }} /></button>
-                          <button onClick={() => { setResetTarget(u); setNewPwd('') }} title="Réinitialiser mot de passe" style={{ background: 'rgba(245,158,11,0.12)', border: '1px solid rgba(245,158,11,0.35)', borderRadius: '8px', padding: '6px 10px', cursor: 'pointer', display: 'flex', alignItems: 'center' }}><KeyRound size={13} style={{ color: '#f59e0b' }} /></button>
-                          {u.username !== 'admin' && <button onClick={() => handleDelete(u)} title="Supprimer" style={{ background: 'rgba(239,68,68,0.12)', border: '1px solid rgba(239,68,68,0.35)', borderRadius: '8px', padding: '6px 10px', cursor: 'pointer', display: 'flex', alignItems: 'center' }}><Trash2 size={13} style={{ color: '#ef4444' }} /></button>}
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
+                  {users.map(u => {
+                    const expiry = getExpiryStatus(u.expires_at || null)
+                    return (
+                      <tr key={u.id} style={{ borderBottom: `1px solid ${rowBorder}` }}
+                        onMouseEnter={e => (e.currentTarget as HTMLElement).style.background = rowHover}
+                        onMouseLeave={e => (e.currentTarget as HTMLElement).style.background = 'transparent'}>
+                        <td style={{ padding: '12px' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                            <div style={{ width: '28px', height: '28px', borderRadius: '8px', background: 'rgba(0,130,240,0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '12px', fontWeight: 700, color: '#0082f0' }}>{u.username[0].toUpperCase()}</div>
+                            <span style={{ fontSize: '13px', fontWeight: 600, color: textCol }}>{u.username}</span>
+                          </div>
+                        </td>
+                        <td style={{ padding: '12px', fontSize: '13px', color: text2Col }}>{u.full_name || '—'}</td>
+                        <td style={{ padding: '12px', fontSize: '12px', color: text2Col, fontFamily: 'monospace' }}>{u.email || '—'}</td>
+                        <td style={{ padding: '12px' }}><RoleBadge role={u.role} /></td>
+                        {/* ✅ Colonne expiration */}
+                        <td style={{ padding: '12px' }}>
+                          {u.role === 'admin' ? (
+                            <span style={{ fontSize: '11px', color: subCol }}>—</span>
+                          ) : (
+                            <span style={{ fontSize: '11px', fontWeight: 600, color: expiry.color, background: expiry.bg, padding: '3px 8px', borderRadius: '6px' }}>
+                              {expiry.label}
+                            </span>
+                          )}
+                        </td>
+                        <td style={{ padding: '12px', fontSize: '12px', color: subCol }}>{u.last_login ? new Date(u.last_login).toLocaleString('fr-FR') : 'Jamais'}</td>
+                        <td style={{ padding: '12px' }}>
+                          <div style={{ display: 'flex', gap: '6px' }}>
+                            <button onClick={() => openEditUser(u)} title="Modifier" style={{ background: 'rgba(0,130,240,0.12)', border: '1px solid rgba(0,130,240,0.35)', borderRadius: '8px', padding: '6px 10px', cursor: 'pointer', display: 'flex', alignItems: 'center' }}><Pencil size={13} style={{ color: '#0082f0' }} /></button>
+                            {/* ✅ Bouton expiration — uniquement pour les opérateurs */}
+                            {u.role === 'operator' && (
+                              <button onClick={() => openExpiry(u)} title="Définir expiration"
+                                style={{ background: 'rgba(168,85,247,0.12)', border: '1px solid rgba(168,85,247,0.35)', borderRadius: '8px', padding: '6px 10px', cursor: 'pointer', display: 'flex', alignItems: 'center' }}>
+                                <Clock size={13} style={{ color: '#a855f7' }} />
+                              </button>
+                            )}
+                            <button onClick={() => { setResetTarget(u); setNewPwd('') }} title="Réinitialiser mot de passe" style={{ background: 'rgba(245,158,11,0.12)', border: '1px solid rgba(245,158,11,0.35)', borderRadius: '8px', padding: '6px 10px', cursor: 'pointer', display: 'flex', alignItems: 'center' }}><KeyRound size={13} style={{ color: '#f59e0b' }} /></button>
+                            {u.username !== 'admin' && <button onClick={() => handleDelete(u)} title="Supprimer" style={{ background: 'rgba(239,68,68,0.12)', border: '1px solid rgba(239,68,68,0.35)', borderRadius: '8px', padding: '6px 10px', cursor: 'pointer', display: 'flex', alignItems: 'center' }}><Trash2 size={13} style={{ color: '#ef4444' }} /></button>}
+                          </div>
+                        </td>
+                      </tr>
+                    )
+                  })}
                 </tbody>
               </table>
             </div>
@@ -370,29 +426,15 @@ export default function AdminPage() {
               {nodes.map(n => (
                 <div key={n.id} style={{ border: `1px solid ${nodeBorder}`, borderRadius: '12px', padding: '18px', background: nodeBg, borderLeft: `4px solid ${roleColor[n.role] || '#6b7280'}` }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '10px' }}>
-                    <div>
-                      <div style={{ fontSize: '14px', fontWeight: 700, color: titleCol, marginBottom: '4px' }}>{n.name}</div>
-                      <Badge role={n.role} />
-                    </div>
+                    <div><div style={{ fontSize: '14px', fontWeight: 700, color: titleCol, marginBottom: '4px' }}>{n.name}</div><Badge role={n.role} /></div>
                     <div style={{ display: 'flex', gap: '6px' }}>
-                      {/* ✅ Bouton modifier noeud */}
-                      <button onClick={() => openEditNode(n)} title="Modifier"
-                        style={{ background: 'rgba(0,130,240,0.1)', border: '1px solid rgba(0,130,240,0.3)', borderRadius: '8px', padding: '6px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                        <Pencil size={13} style={{ color: '#0082f0' }} />
-                      </button>
-                      <button onClick={() => handleDeleteNode(n.name)} title="Supprimer"
-                        style={{ background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.25)', borderRadius: '8px', padding: '6px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                        <Trash2 size={13} style={{ color: '#ef4444' }} />
-                      </button>
+                      <button onClick={() => openEditNode(n)} title="Modifier" style={{ background: 'rgba(0,130,240,0.1)', border: '1px solid rgba(0,130,240,0.3)', borderRadius: '8px', padding: '6px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><Pencil size={13} style={{ color: '#0082f0' }} /></button>
+                      <button onClick={() => handleDeleteNode(n.name)} title="Supprimer" style={{ background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.25)', borderRadius: '8px', padding: '6px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><Trash2 size={13} style={{ color: '#ef4444' }} /></button>
                     </div>
                   </div>
                   <div style={{ fontSize: '12px', color: subCol, marginBottom: '10px' }}>{n.description}</div>
                   <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
-                    {[
-                      { label: `Port : ${n.port}`,          show: true },
-                      { label: `IP : ${n.ip_address}`,      show: !!n.ip_address },
-                      { label: n.server_type || '',          show: !!n.server_type },
-                    ].filter(x => x.show).map(x => (
+                    {[{ label: `Port : ${n.port}`, show: true }, { label: `IP : ${n.ip_address}`, show: !!n.ip_address }, { label: n.server_type || '', show: !!n.server_type }].filter(x => x.show).map(x => (
                       <span key={x.label} style={{ fontSize: '11px', color: monoText, fontFamily: 'monospace', background: monoTag, padding: '3px 8px', borderRadius: '6px' }}>{x.label}</span>
                     ))}
                   </div>
@@ -453,6 +495,52 @@ export default function AdminPage() {
         </Modal>
       )}
 
+      {/* ══ MODAL Expiration ══ */}
+      {expiryTarget && (
+        <Modal title={`Expiration — ${expiryTarget.username}`} onClose={() => { setExpiryTarget(null); setExpiryErr('') }} isDark={isDark}>
+          <div style={{ padding: '12px', borderRadius: '10px', background: isDark ? 'rgba(168,85,247,0.1)' : 'rgba(168,85,247,0.06)', border: '1px solid rgba(168,85,247,0.2)', fontSize: '12px', color: subCol, lineHeight: 1.6 }}>
+            <strong style={{ color: '#a855f7' }}>Délai d&apos;expiration</strong> — À l&apos;expiration, l&apos;opérateur ne pourra plus se connecter. Laissez vide pour un accès illimité.
+          </div>
+
+          {/* Statut actuel */}
+          {expiryTarget.expires_at && (() => {
+            const s = getExpiryStatus(expiryTarget.expires_at!)
+            return (
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '12px' }}>
+                <span style={{ color: subCol }}>Statut actuel :</span>
+                <span style={{ fontWeight: 700, color: s.color, background: s.bg, padding: '2px 8px', borderRadius: '6px' }}>{s.label}</span>
+                <span style={{ color: subCol }}>— {new Date(expiryTarget.expires_at!).toLocaleString('fr-FR')}</span>
+              </div>
+            )
+          })()}
+
+          <Field label="Nouvelle date d'expiration" hint="Laissez vide pour supprimer la limite">
+            <input
+              style={inputS}
+              type="datetime-local"
+              min={minDate}
+              value={expiryDate}
+              onChange={e => setExpiryDate(e.target.value)}
+            />
+          </Field>
+
+          {expiryErr && <p style={{ color: '#ef4444', fontSize: '12px', background: 'rgba(239,68,68,0.1)', padding: '8px 12px', borderRadius: '8px', margin: 0 }}>{expiryErr}</p>}
+
+          <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>
+            <button type="button" onClick={() => { setExpiryTarget(null); setExpiryErr('') }} style={btnStyle('#7a9bc5', true)}>Annuler</button>
+            {expiryDate && (
+              <button type="button" onClick={() => { setExpiryDate('') }} title="Supprimer la limite"
+                style={{ ...btnStyle('#6b7280', true), gap: '4px' }}>
+                <X size={12} /> Supprimer limite
+              </button>
+            )}
+            <button type="button" onClick={handleSetExpiry} disabled={savingExpiry} style={btnStyle('#a855f7')}>
+              <Clock size={13} />{savingExpiry ? 'Enregistrement...' : 'Enregistrer'}
+            </button>
+          </div>
+        </Modal>
+      )}
+
       {/* ══ MODAL Reset password ══ */}
       {resetTarget && (
         <Modal title="Réinitialiser le mot de passe" onClose={() => { setResetTarget(null); setNewPwd('') }} isDark={isDark}>
@@ -474,19 +562,10 @@ export default function AdminPage() {
       {showCreateNode && (
         <Modal title="Ajouter un noeud" onClose={() => { setShowCreateNode(false); setNodeErr(''); setIpTouched(false); setStTouched(false) }} isDark={isDark}>
           <Field label="Nom du noeud *"><input style={inputS} placeholder="ex: ttsdp18a" value={newNode.name} onChange={e => setNewNode(p => ({ ...p, name: e.target.value }))} /></Field>
-          <Field label="Rôle *">
-            <StyledSelect value={newNode.role} onChange={v => setNewNode(p => ({ ...p, role: v }))} style={selectS}>
-              {ROLES.map(r => <Opt key={r} value={r} label={r} />)}
-            </StyledSelect>
-          </Field>
+          <Field label="Rôle *"><StyledSelect value={newNode.role} onChange={v => setNewNode(p => ({ ...p, role: v }))} style={selectS}>{ROLES.map(r => <Opt key={r} value={r} label={r} />)}</StyledSelect></Field>
           <Field label="Description *"><input style={inputS} placeholder="ex: Service Data Point secondaire" value={newNode.description} onChange={e => setNewNode(p => ({ ...p, description: e.target.value }))} /></Field>
-          {/* ✅ IP et Server Type obligatoires */}
-          <Field label="Adresse IP *" error={ipErr}>
-            <input style={ipErr ? inputErr : inputS} placeholder="ex: 192.168.147.130" value={newNode.ip_address} onChange={e => setNewNode(p => ({ ...p, ip_address: e.target.value }))} onBlur={() => setIpTouched(true)} />
-          </Field>
-          <Field label="Type de serveur *" error={stErr}>
-            <input style={stErr ? inputErr : inputS} placeholder="ex: HPE ProLiant DL360p Gen8" value={newNode.server_type} onChange={e => setNewNode(p => ({ ...p, server_type: e.target.value }))} onBlur={() => setStTouched(true)} />
-          </Field>
+          <Field label="Adresse IP *" error={ipErr}><input style={ipErr ? inputErr : inputS} placeholder="ex: 192.168.147.130" value={newNode.ip_address} onChange={e => setNewNode(p => ({ ...p, ip_address: e.target.value }))} onBlur={() => setIpTouched(true)} /></Field>
+          <Field label="Type de serveur *" error={stErr}><input style={stErr ? inputErr : inputS} placeholder="ex: HPE ProLiant DL360p Gen8" value={newNode.server_type} onChange={e => setNewNode(p => ({ ...p, server_type: e.target.value }))} onBlur={() => setStTouched(true)} /></Field>
           <Field label="Port *"><input style={inputS} type="number" placeholder="ex: 9107" value={newNode.port} onChange={e => setNewNode(p => ({ ...p, port: e.target.value }))} /></Field>
           {nodeErr && <p style={{ color: '#ef4444', fontSize: '12px', background: 'rgba(239,68,68,0.1)', padding: '8px 12px', borderRadius: '8px', margin: 0 }}>{nodeErr}</p>}
           <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>
@@ -499,21 +578,11 @@ export default function AdminPage() {
       {/* ══ MODAL Modifier noeud ══ */}
       {editNode && (
         <Modal title={`Modifier "${editNode.name}"`} onClose={() => { setEditNode(null); setEditNodeErr('') }} isDark={isDark}>
-          <Field label="Rôle *">
-            <StyledSelect value={editNodeForm.role} onChange={v => setEditNodeForm(p => ({ ...p, role: v }))} style={selectS}>
-              {ROLES.map(r => <Opt key={r} value={r} label={r} />)}
-            </StyledSelect>
-          </Field>
+          <Field label="Rôle *"><StyledSelect value={editNodeForm.role} onChange={v => setEditNodeForm(p => ({ ...p, role: v }))} style={selectS}>{ROLES.map(r => <Opt key={r} value={r} label={r} />)}</StyledSelect></Field>
           <Field label="Description"><input style={inputS} value={editNodeForm.description} onChange={e => setEditNodeForm(p => ({ ...p, description: e.target.value }))} /></Field>
-          <Field label="Adresse IP *">
-            <input style={inputS} placeholder="ex: 192.168.147.128" value={editNodeForm.ip_address} onChange={e => setEditNodeForm(p => ({ ...p, ip_address: e.target.value }))} />
-          </Field>
-          <Field label="Type de serveur *">
-            <input style={inputS} placeholder="ex: HPE ProLiant DL360p Gen8" value={editNodeForm.server_type} onChange={e => setEditNodeForm(p => ({ ...p, server_type: e.target.value }))} />
-          </Field>
-          <Field label="Port *">
-            <input style={inputS} type="number" value={editNodeForm.port} onChange={e => setEditNodeForm(p => ({ ...p, port: e.target.value }))} />
-          </Field>
+          <Field label="Adresse IP *"><input style={inputS} placeholder="ex: 192.168.147.128" value={editNodeForm.ip_address} onChange={e => setEditNodeForm(p => ({ ...p, ip_address: e.target.value }))} /></Field>
+          <Field label="Type de serveur *"><input style={inputS} placeholder="ex: HPE ProLiant DL360p Gen8" value={editNodeForm.server_type} onChange={e => setEditNodeForm(p => ({ ...p, server_type: e.target.value }))} /></Field>
+          <Field label="Port *"><input style={inputS} type="number" value={editNodeForm.port} onChange={e => setEditNodeForm(p => ({ ...p, port: e.target.value }))} /></Field>
           {editNodeErr && <p style={{ color: '#ef4444', fontSize: '12px', background: 'rgba(239,68,68,0.1)', padding: '8px 12px', borderRadius: '8px', margin: 0 }}>{editNodeErr}</p>}
           <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>
             <button type="button" onClick={() => { setEditNode(null); setEditNodeErr('') }} style={btnStyle('#7a9bc5', true)}>Annuler</button>
@@ -525,6 +594,7 @@ export default function AdminPage() {
       <style>{`
         @keyframes slideIn { from { opacity:0; transform:translateX(20px); } to { opacity:1; transform:translateX(0); } }
         select option { background: #ffffff !important; color: #0a1628 !important; }
+        input[type="datetime-local"] { color-scheme: ${isDark ? 'dark' : 'light'}; }
       `}</style>
     </DashboardLayout>
   )

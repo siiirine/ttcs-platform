@@ -10,6 +10,16 @@ import { XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Area, AreaCh
 import type { PredictResponse, SDPPrediction } from '@/lib/api'
 import { api } from '@/lib/api'
 
+// ✅ Map noms techniques → noms affichés
+const NODE_DISPLAY_NAMES: Record<string, string> = {
+  'jambala':  'CCN-Node-01',
+  'ttair6':   'AIR-Node-01',
+  'ttsdp17a': 'SDP-Node-01',
+  'ttvs3a':   'VS-Node-01',
+  'ttocc1':   'OCC-Node-01',
+  'ttaf1':    'AF-Node-01',
+}
+
 export default function PredictionPage() {
   const [predictions, setPredictions] = useState<PredictResponse | null>(null)
   const [isLoading, setIsLoading] = useState(true)
@@ -121,7 +131,9 @@ export default function PredictionPage() {
 
         {/* SDP Cards */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
-          {sdpNodes.map(([name, sdp]) => <SDPNodeCard key={name} name={name} sdp={sdp} />)}
+          {sdpNodes.map(([name, sdp]) => (
+            <SDPNodeCard key={name} name={name} sdp={sdp} />
+          ))}
         </div>
 
       </div>
@@ -154,6 +166,9 @@ function RiskGauge({ score, level, textColor, subColor }: { score: number; level
 
 function SDPNodeCard({ name, sdp }: { name: string; sdp: SDPPrediction }) {
   const c = useThemeColors()
+  // ✅ Nom affiché : depuis la map ou depuis sdp si disponible
+  const displayName = NODE_DISPLAY_NAMES[name] || name
+
   const chartData = sdp.prediction.predictions.map(p => ({ label: p.label, failRate: +(p.fail_rate * 100).toFixed(4), lower: +(p.lower * 100).toFixed(4), upper: +(p.upper * 100).toFixed(4) }))
   const TrendIcon = sdp.prediction.tendance >= 0 ? TrendingUp : TrendingDown
   const trendColor = sdp.prediction.tendance >= 0 ? '#f59e0b' : '#10b981'
@@ -167,8 +182,10 @@ function SDPNodeCard({ name, sdp }: { name: string; sdp: SDPPrediction }) {
         <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
           <div style={{ padding: '8px', borderRadius: '10px', background: 'rgba(168,85,247,0.12)' }}><BarChart3 size={18} style={{ color: '#a855f7' }} /></div>
           <div>
-            <h3 style={{ fontSize: '1.1rem', fontWeight: 800, color: c.textPrimary }}>{name}</h3>
-            <p style={{ fontSize: '12px', color: c.textSecondary }}>Service Data Point</p>
+            {/* ✅ Affiche display_name en grand */}
+            <h3 style={{ fontSize: '1.1rem', fontWeight: 800, color: c.textPrimary }}>{displayName}</h3>
+            {/* ✅ Nom technique en petit si différent */}
+          <p style={{ fontSize: '11px', color: c.textSecondary }}>Service Data Point</p>
           </div>
         </div>
         <StatusBadge status={sdp.prediction.risk_level} size="md" pulse={sdp.prediction.risk_level === 'CRITICAL'} />

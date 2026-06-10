@@ -6,9 +6,10 @@ import { DashboardLayout } from '@/components/dashboard/dashboard-layout'
 import { adminApi, User, NodeAdmin } from '@/lib/api'
 import {
   Users, Server, Plus, Trash2,
-  KeyRound, RefreshCw, ShieldCheck, Eye, EyeOff, Pencil, Clock, X,
+  KeyRound, RefreshCw, ShieldCheck, Eye, EyeOff, Pencil, Clock, X, Lock,
 } from 'lucide-react'
 
+const BASE_URL = 'http://192.168.147.129:8000'
 const ROLES = ['CCN', 'AIR', 'SDP', 'VS', 'OCC', 'AF']
 
 const roleColor: Record<string, string> = {
@@ -23,13 +24,11 @@ function useIsDark() {
   return mounted && resolvedTheme === 'dark'
 }
 
-const ALLOWED_DOMAINS = ['@ericsson.com', '@tunisietelecom.com']
-function isValidEmail(email: string): boolean {
-  const e = email.trim().toLowerCase()
-  return ALLOWED_DOMAINS.some(d => e.endsWith(d)) && e.indexOf('@') > 0
+function getCookie(name: string): string {
+  if (typeof document === 'undefined') return ''
+  const match = document.cookie.match(new RegExp('(^| )' + name + '=([^;]+)'))
+  return match ? decodeURIComponent(match[2]) : ''
 }
-const EMAIL_HINT  = 'Adresse @ericsson.com ou @tunisietelecom.com'
-const EMAIL_ERROR = 'L\'email doit terminer par @ericsson.com ou @tunisietelecom.com'
 
 // ✅ Calcule le statut d'expiration
 function getExpiryStatus(expires_at: string | null): { label: string; color: string; bg: string } {
@@ -127,31 +126,37 @@ export default function AdminPage() {
   const [toast, setToast] = useState<{ msg: string; ok: boolean } | null>(null)
   const showToast = (msg: string, ok = true) => { setToast({ msg, ok }); setTimeout(() => setToast(null), 3500) }
 
-  // Create user
+  // ✅ Create user — seulement full_name + email + role
   const [showCreate, setShowCreate] = useState(false)
-  const [newUser, setNewUser] = useState({ username: '', password: '', full_name: '', email: '', role: '' })
-  const [emailTouched, setEmailTouched] = useState(false)
-  const [roleTouched, setRoleTouched]   = useState(false)
-  const [showPwd, setShowPwd] = useState(false)
+  const [newUser, setNewUser] = useState({ full_name: '', email: '', role: 'operator' })
+  const [roleTouched, setRoleTouched] = useState(false)
   const [savingCreate, setSavingCreate] = useState(false)
   const [createErr, setCreateErr] = useState('')
 
   // Edit user
   const [editUser, setEditUser] = useState<User | null>(null)
   const [editUserForm, setEditUserForm] = useState({ full_name: '', email: '', role: '' })
-  const [editUserEmailTouched, setEditUserEmailTouched] = useState(false)
   const [savingEditUser, setSavingEditUser] = useState(false)
   const [editUserErr, setEditUserErr] = useState('')
 
-  // Reset pwd
+  // Reset pwd (admin)
   const [resetTarget, setResetTarget] = useState<User | null>(null)
   const [newPwd, setNewPwd] = useState('')
   const [showNewPwd, setShowNewPwd] = useState(false)
   const [savingPwd, setSavingPwd] = useState(false)
 
-  // ✅ Expiration
+  // ✅ Changer son propre mot de passe
+  const [showChangePwd, setShowChangePwd] = useState(false)
+  const [changePwdForm, setChangePwdForm] = useState({ old_password: '', new_password: '', confirm: '' })
+  const [showOldPwd, setShowOldPwd] = useState(false)
+  const [showNewUserPwd, setShowNewUserPwd] = useState(false)
+  const [showConfirmPwd, setShowConfirmPwd] = useState(false)
+  const [savingChangePwd, setSavingChangePwd] = useState(false)
+  const [changePwdErr, setChangePwdErr] = useState('')
+
+  // Expiration
   const [expiryTarget, setExpiryTarget] = useState<User | null>(null)
-  const [expiryDate, setExpiryDate]     = useState('')   // format: YYYY-MM-DDTHH:MM
+  const [expiryDate, setExpiryDate]     = useState('')
   const [savingExpiry, setSavingExpiry] = useState(false)
   const [expiryErr, setExpiryErr]       = useState('')
 
@@ -169,11 +174,9 @@ export default function AdminPage() {
   const [savingEditNode, setSavingEditNode] = useState(false)
   const [editNodeErr, setEditNodeErr] = useState('')
 
-  const createEmailErr = emailTouched && newUser.email && !isValidEmail(newUser.email) ? EMAIL_ERROR : ''
-  const createRoleErr  = roleTouched && !newUser.role ? 'Le rôle est obligatoire' : ''
-  const ipErr          = ipTouched && !newNode.ip_address.trim() ? 'L\'adresse IP est obligatoire' : ''
-  const stErr          = stTouched && !newNode.server_type.trim() ? 'Le type de serveur est obligatoire' : ''
-  const editEmailErr   = editUserEmailTouched && editUserForm.email && !isValidEmail(editUserForm.email) ? EMAIL_ERROR : ''
+  const createRoleErr = roleTouched && !newUser.role ? 'Le rôle est obligatoire' : ''
+  const ipErr = ipTouched && !newNode.ip_address.trim() ? "L'adresse IP est obligatoire" : ''
+  const stErr = stTouched && !newNode.server_type.trim() ? 'Le type de serveur est obligatoire' : ''
 
   const fetchUsers = async () => {
     setLoadingU(true)
@@ -189,32 +192,60 @@ export default function AdminPage() {
   }
   useEffect(() => { fetchUsers(); fetchNodes() }, [])
 
+  // ✅ Création user simplifiée — full_name + email + role
   const handleCreate = async () => {
     setCreateErr('')
-    if (!newUser.username || !newUser.password) { setCreateErr('Username et mot de passe requis'); return }
-    if (!newUser.email) { setCreateErr('L\'email est obligatoire'); setEmailTouched(true); return }
-    if (!isValidEmail(newUser.email)) { setCreateErr(EMAIL_ERROR); setEmailTouched(true); return }
+    if (!newUser.full_name.trim()) { setCreateErr('Le nom complet est obligatoire'); return }
+    if (!newUser.email.trim()) { setCreateErr("L'adresse email est obligatoire"); return }
+    if (!newUser.email.includes('@') || newUser.email.indexOf('@') === 0) { setCreateErr("L'adresse email est invalide"); return }
     if (!newUser.role) { setCreateErr('Le rôle est obligatoire'); setRoleTouched(true); return }
     setSavingCreate(true)
     try {
-      await adminApi.createUser({ ...newUser, email: newUser.email.trim().toLowerCase() })
-      showToast(`Utilisateur "${newUser.username}" créé`)
-      setShowCreate(false); setNewUser({ username: '', password: '', full_name: '', email: '', role: '' })
-      setEmailTouched(false); setRoleTouched(false); fetchUsers()
+      const result = await fetch(`${BASE_URL}/admin/users`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${getCookie('ttcs_token')}`,
+        },
+        body: JSON.stringify({
+          full_name: newUser.full_name.trim(),
+          email: newUser.email.trim().toLowerCase(),
+          role: newUser.role,
+        }),
+      })
+      const data = await result.json()
+      if (!result.ok) throw new Error(data.detail || 'Erreur lors de la création')
+
+      const emailMsg = data.email_sent ? ' — Email envoyé ✉️' : ' — Email non envoyé (vérifier config)'
+      showToast(`Utilisateur "${data.user.username}" créé${emailMsg}`)
+      setShowCreate(false)
+      setNewUser({ full_name: '', email: '', role: 'operator' })
+      setRoleTouched(false)
+      fetchUsers()
     } catch (e) { setCreateErr(e instanceof Error ? e.message : 'Erreur') }
     finally { setSavingCreate(false) }
   }
 
-  const openEditUser = (u: User) => { setEditUser(u); setEditUserForm({ full_name: u.full_name || '', email: u.email || '', role: u.role }); setEditUserErr(''); setEditUserEmailTouched(false) }
+  const openEditUser = (u: User) => {
+    setEditUser(u)
+    setEditUserForm({ full_name: u.full_name || '', email: u.email || '', role: u.role })
+    setEditUserErr('')
+  }
 
   const handleEditUser = async () => {
     if (!editUser) return; setEditUserErr('')
-    if (editUserForm.email && !isValidEmail(editUserForm.email)) { setEditUserErr(EMAIL_ERROR); setEditUserEmailTouched(true); return }
+    if (editUserForm.email && !editUserForm.email.includes('@')) { setEditUserErr("L'adresse email est invalide"); return }
     if (!editUserForm.role) { setEditUserErr('Le rôle est obligatoire'); return }
     setSavingEditUser(true)
     try {
-      await adminApi.updateUser(editUser.id, { full_name: editUserForm.full_name || undefined, email: editUserForm.email ? editUserForm.email.trim().toLowerCase() : undefined, role: editUserForm.role })
-      showToast(`"${editUser.username}" modifié`); setEditUser(null); fetchUsers()
+      await adminApi.updateUser(editUser.id, {
+        full_name: editUserForm.full_name || undefined,
+        email: editUserForm.email ? editUserForm.email.trim().toLowerCase() : undefined,
+        role: editUserForm.role
+      })
+      showToast(`"${editUser.username}" modifié`)
+      setEditUser(null)
+      fetchUsers()
     } catch (e) { setEditUserErr(e instanceof Error ? e.message : 'Erreur') }
     finally { setSavingEditUser(false) }
   }
@@ -227,17 +258,47 @@ export default function AdminPage() {
 
   const handleResetPwd = async () => {
     if (!resetTarget || !newPwd) return; setSavingPwd(true)
-    try { await adminApi.resetPassword(resetTarget.id, newPwd); showToast(`Mot de passe de "${resetTarget.username}" réinitialisé`); setResetTarget(null); setNewPwd('') }
+    try {
+      await adminApi.resetPassword(resetTarget.id, newPwd)
+      showToast(`Mot de passe de "${resetTarget.username}" réinitialisé`)
+      setResetTarget(null); setNewPwd('')
+    }
     catch (e) { showToast(e instanceof Error ? e.message : 'Erreur', false) }
     finally { setSavingPwd(false) }
   }
 
-  // ✅ Ouvrir modal expiration — pré-remplir avec la date actuelle si elle existe
+  // ✅ Changer son propre mot de passe
+  const handleChangePwd = async () => {
+    setChangePwdErr('')
+    if (!changePwdForm.old_password) { setChangePwdErr("L'ancien mot de passe est requis"); return }
+    if (!changePwdForm.new_password) { setChangePwdErr('Le nouveau mot de passe est requis'); return }
+    if (changePwdForm.new_password.length < 6) { setChangePwdErr('Le nouveau mot de passe doit contenir au moins 6 caractères'); return }
+    if (changePwdForm.new_password !== changePwdForm.confirm) { setChangePwdErr('Les mots de passe ne correspondent pas'); return }
+    setSavingChangePwd(true)
+    try {
+      const res = await fetch(`${BASE_URL}/auth/change-password`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${getCookie('ttcs_token')}`,
+        },
+        body: JSON.stringify({
+          old_password: changePwdForm.old_password,
+          new_password: changePwdForm.new_password,
+        }),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.detail || 'Erreur')
+      showToast('✅ Mot de passe modifié avec succès')
+      setShowChangePwd(false)
+      setChangePwdForm({ old_password: '', new_password: '', confirm: '' })
+    } catch (e) { setChangePwdErr(e instanceof Error ? e.message : 'Erreur') }
+    finally { setSavingChangePwd(false) }
+  }
+
   const openExpiry = (u: User) => {
-    setExpiryTarget(u)
-    setExpiryErr('')
+    setExpiryTarget(u); setExpiryErr('')
     if (u.expires_at) {
-      // Format pour input datetime-local : YYYY-MM-DDTHH:MM
       const d = new Date(u.expires_at)
       const pad = (n: number) => String(n).padStart(2, '0')
       setExpiryDate(`${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`)
@@ -260,13 +321,14 @@ export default function AdminPage() {
   const handleCreateNode = async () => {
     setNodeErr('')
     if (!newNode.name || !newNode.description || !newNode.port) { setNodeErr('Nom, description et port requis'); return }
-    if (!newNode.ip_address.trim()) { setNodeErr('L\'adresse IP est obligatoire'); setIpTouched(true); return }
+    if (!newNode.ip_address.trim()) { setNodeErr("L'adresse IP est obligatoire"); setIpTouched(true); return }
     if (!newNode.server_type.trim()) { setNodeErr('Le type de serveur est obligatoire'); setStTouched(true); return }
     setSavingNode(true)
     try {
       await adminApi.createNode({ ...newNode, port: parseInt(newNode.port) })
       showToast(`Noeud "${newNode.name}" ajouté`)
-      setShowCreateNode(false); setNewNode({ name: '', role: 'CCN', description: '', ip_address: '', server_type: '', port: '' })
+      setShowCreateNode(false)
+      setNewNode({ name: '', role: 'CCN', description: '', ip_address: '', server_type: '', port: '' })
       setIpTouched(false); setStTouched(false); fetchNodes()
     } catch (e) { setNodeErr(e instanceof Error ? e.message : 'Erreur') }
     finally { setSavingNode(false) }
@@ -280,13 +342,18 @@ export default function AdminPage() {
 
   const handleEditNode = async () => {
     if (!editNode) return; setEditNodeErr('')
-    if (!editNodeForm.ip_address.trim()) { setEditNodeErr('L\'adresse IP est obligatoire'); return }
+    if (!editNodeForm.ip_address.trim()) { setEditNodeErr("L'adresse IP est obligatoire"); return }
     if (!editNodeForm.server_type.trim()) { setEditNodeErr('Le type de serveur est obligatoire'); return }
     if (!editNodeForm.port) { setEditNodeErr('Le port est obligatoire'); return }
     setSavingEditNode(true)
     try {
-      await adminApi.updateNode(editNode.name, { role: editNodeForm.role, description: editNodeForm.description, ip_address: editNodeForm.ip_address.trim(), server_type: editNodeForm.server_type.trim(), port: parseInt(editNodeForm.port) })
-      showToast(`Noeud "${editNode.name}" modifié`); setEditNode(null); fetchNodes()
+      await adminApi.updateNode(editNode.name, {
+        role: editNodeForm.role, description: editNodeForm.description,
+        ip_address: editNodeForm.ip_address.trim(), server_type: editNodeForm.server_type.trim(),
+        port: parseInt(editNodeForm.port)
+      })
+      showToast(`Noeud "${editNode.name}" modifié`)
+      setEditNode(null); fetchNodes()
     } catch (e) { setEditNodeErr(e instanceof Error ? e.message : 'Erreur') }
     finally { setSavingEditNode(false) }
   }
@@ -297,7 +364,6 @@ export default function AdminPage() {
     catch (e) { showToast(e instanceof Error ? e.message : 'Erreur', false) }
   }
 
-  // Date min pour datetime-local = maintenant
   const minDate = new Date(Date.now() + 60000).toISOString().slice(0, 16)
 
   return (
@@ -309,11 +375,21 @@ export default function AdminPage() {
       )}
 
       <div style={{ marginBottom: '28px' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '6px' }}>
-          <div style={{ width: '36px', height: '36px', borderRadius: '10px', background: 'rgba(239,68,68,0.15)', border: '1px solid rgba(239,68,68,0.3)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-            <ShieldCheck size={18} style={{ color: '#ef4444' }} />
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '6px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+            <div style={{ width: '36px', height: '36px', borderRadius: '10px', background: 'rgba(239,68,68,0.15)', border: '1px solid rgba(239,68,68,0.3)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              <ShieldCheck size={18} style={{ color: '#ef4444' }} />
+            </div>
+            <h1 style={{ fontSize: '1.5rem', fontWeight: 700, color: titleCol, margin: 0 }}>Administration</h1>
           </div>
-          <h1 style={{ fontSize: '1.5rem', fontWeight: 700, color: titleCol, margin: 0 }}>Administration</h1>
+          {/* ✅ Bouton changer son propre mot de passe — accessible à tous */}
+          <button
+            onClick={() => { setShowChangePwd(true); setChangePwdErr(''); setChangePwdForm({ old_password: '', new_password: '', confirm: '' }) }}
+            style={{ ...btnStyle('rgba(168,85,247,0.15)', true), color: '#a855f7', border: '1px solid rgba(168,85,247,0.4)' }}
+          >
+            <Lock size={13} style={{ color: '#a855f7' }} />
+            <span style={{ color: '#a855f7' }}>Changer mon mot de passe</span>
+          </button>
         </div>
         <p style={{ color: subCol, fontSize: '13px', margin: 0 }}>Gestion des utilisateurs et de l&apos;infrastructure</p>
       </div>
@@ -345,7 +421,9 @@ export default function AdminPage() {
               <button onClick={fetchUsers} style={btnStyle(isDark ? 'rgba(0,130,240,0.2)' : 'rgba(0,130,240,0.08)', true)}>
                 <RefreshCw size={13} style={{ color: '#0082f0' }} /><span style={{ color: '#0082f0' }}>Actualiser</span>
               </button>
-              <button onClick={() => setShowCreate(true)} style={btnStyle('#0082f0')}><Plus size={14} /> Nouvel opérateur</button>
+              <button onClick={() => { setShowCreate(true); setCreateErr('') }} style={btnStyle('#0082f0')}>
+                <Plus size={14} /> Nouvel utilisateur
+              </button>
             </div>
           </div>
           {loadingU ? <div style={{ textAlign: 'center', padding: '40px', color: subCol }}>Chargement...</div> : (
@@ -374,7 +452,6 @@ export default function AdminPage() {
                         <td style={{ padding: '12px', fontSize: '13px', color: text2Col }}>{u.full_name || '—'}</td>
                         <td style={{ padding: '12px', fontSize: '12px', color: text2Col, fontFamily: 'monospace' }}>{u.email || '—'}</td>
                         <td style={{ padding: '12px' }}><RoleBadge role={u.role} /></td>
-                        {/* ✅ Colonne expiration */}
                         <td style={{ padding: '12px' }}>
                           {u.role === 'admin' ? (
                             <span style={{ fontSize: '11px', color: subCol }}>—</span>
@@ -388,7 +465,6 @@ export default function AdminPage() {
                         <td style={{ padding: '12px' }}>
                           <div style={{ display: 'flex', gap: '6px' }}>
                             <button onClick={() => openEditUser(u)} title="Modifier" style={{ background: 'rgba(0,130,240,0.12)', border: '1px solid rgba(0,130,240,0.35)', borderRadius: '8px', padding: '6px 10px', cursor: 'pointer', display: 'flex', alignItems: 'center' }}><Pencil size={13} style={{ color: '#0082f0' }} /></button>
-                            {/* ✅ Bouton expiration — uniquement pour les opérateurs */}
                             {u.role === 'operator' && (
                               <button onClick={() => openExpiry(u)} title="Définir expiration"
                                 style={{ background: 'rgba(168,85,247,0.12)', border: '1px solid rgba(168,85,247,0.35)', borderRadius: '8px', padding: '6px 10px', cursor: 'pointer', display: 'flex', alignItems: 'center' }}>
@@ -445,31 +521,56 @@ export default function AdminPage() {
         </div>
       )}
 
-      {/* ══ MODAL Créer user ══ */}
+      {/* ══ MODAL Créer user — simplifié ══ */}
       {showCreate && (
-        <Modal title="Créer un opérateur" onClose={() => { setShowCreate(false); setCreateErr(''); setEmailTouched(false); setRoleTouched(false) }} isDark={isDark}>
-          <Field label="Nom d'utilisateur *"><input style={inputS} placeholder="ex: operateur1" value={newUser.username} onChange={e => setNewUser(p => ({ ...p, username: e.target.value }))} /></Field>
-          <Field label="Nom complet"><input style={inputS} placeholder="ex: Ahmed Ben Ali" value={newUser.full_name} onChange={e => setNewUser(p => ({ ...p, full_name: e.target.value }))} /></Field>
-          <Field label="Email *" hint={EMAIL_HINT} error={createEmailErr}>
-            <input style={createEmailErr ? inputErr : inputS} type="email" placeholder="prenom.nom@ericsson.com" value={newUser.email} onChange={e => setNewUser(p => ({ ...p, email: e.target.value }))} onBlur={() => setEmailTouched(true)} />
+        <Modal title="Créer un utilisateur" onClose={() => { setShowCreate(false); setCreateErr(''); setRoleTouched(false) }} isDark={isDark}>
+
+          {/* Info */}
+          <div style={{ background: isDark ? 'rgba(0,130,240,0.1)' : '#f0f7ff', border: '1px solid rgba(0,130,240,0.25)', borderRadius: '10px', padding: '12px 16px', fontSize: '12px', color: subCol, lineHeight: 1.6 }}>
+            <strong style={{ color: '#0082f0' }}>✨ Création automatique</strong> — Le login et le mot de passe seront générés automatiquement et envoyés par email à l&apos;utilisateur.
+          </div>
+
+          <Field label="Nom complet *">
+            <input
+              style={inputS}
+              placeholder="Ex : Ghassen Chelly"
+              value={newUser.full_name}
+              onChange={e => setNewUser(p => ({ ...p, full_name: e.target.value }))}
+            />
           </Field>
-          <Field label="Mot de passe *">
-            <div style={{ position: 'relative' }}>
-              <input style={{ ...inputS, paddingRight: '40px' }} type={showPwd ? 'text' : 'password'} placeholder="••••••••" value={newUser.password} onChange={e => setNewUser(p => ({ ...p, password: e.target.value }))} />
-              <button type="button" onClick={() => setShowPwd(p => !p)} style={{ position: 'absolute', right: '10px', top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', color: '#7a9bc5', display: 'flex' }}>{showPwd ? <EyeOff size={15} /> : <Eye size={15} />}</button>
-            </div>
+
+          <Field label="Adresse email *" hint="Tout email valide est accepté">
+            <input
+              style={inputS}
+              type="email"
+              placeholder="Ex : ghassen@gmail.com"
+              value={newUser.email}
+              onChange={e => setNewUser(p => ({ ...p, email: e.target.value }))}
+            />
           </Field>
+
           <Field label="Rôle *" error={createRoleErr}>
-            <StyledSelect value={newUser.role} onChange={v => { setNewUser(p => ({ ...p, role: v })); setRoleTouched(true) }} style={createRoleErr ? { ...selectS, border: '1px solid rgba(239,68,68,0.6)' } : selectS}>
-              <Opt value="" label="— Sélectionner un rôle —" />
+            <StyledSelect
+              value={newUser.role}
+              onChange={v => { setNewUser(p => ({ ...p, role: v })); setRoleTouched(true) }}
+              style={createRoleErr ? { ...selectS, border: '1px solid rgba(239,68,68,0.6)' } : selectS}
+            >
               <Opt value="operator" label="Opérateur" />
               <Opt value="admin"    label="Administrateur" />
             </StyledSelect>
           </Field>
-          {createErr && <p style={{ color: '#ef4444', fontSize: '12px', background: 'rgba(239,68,68,0.1)', padding: '8px 12px', borderRadius: '8px', margin: 0 }}>{createErr}</p>}
+
+          {createErr && (
+            <p style={{ color: '#ef4444', fontSize: '12px', background: 'rgba(239,68,68,0.1)', padding: '8px 12px', borderRadius: '8px', margin: 0 }}>
+              {createErr}
+            </p>
+          )}
+
           <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>
             <button type="button" onClick={() => { setShowCreate(false); setCreateErr('') }} style={btnStyle('#7a9bc5', true)}>Annuler</button>
-            <button type="button" onClick={handleCreate} disabled={savingCreate} style={btnStyle('#0082f0')}>{savingCreate ? 'Création...' : 'Créer'}</button>
+            <button type="button" onClick={handleCreate} disabled={savingCreate} style={btnStyle('#0082f0')}>
+              {savingCreate ? 'Création...' : '✉️ Créer et envoyer email'}
+            </button>
           </div>
         </Modal>
       )}
@@ -477,9 +578,11 @@ export default function AdminPage() {
       {/* ══ MODAL Modifier user ══ */}
       {editUser && (
         <Modal title={`Modifier "${editUser.username}"`} onClose={() => { setEditUser(null); setEditUserErr('') }} isDark={isDark}>
-          <Field label="Nom complet"><input style={inputS} placeholder="ex: Ahmed Ben Ali" value={editUserForm.full_name} onChange={e => setEditUserForm(p => ({ ...p, full_name: e.target.value }))} /></Field>
-          <Field label="Email *" hint={EMAIL_HINT} error={editEmailErr}>
-            <input style={editEmailErr ? inputErr : inputS} type="email" placeholder="prenom.nom@ericsson.com" value={editUserForm.email} onChange={e => setEditUserForm(p => ({ ...p, email: e.target.value }))} onBlur={() => setEditUserEmailTouched(true)} />
+          <Field label="Nom complet">
+            <input style={inputS} placeholder="Ex: Ahmed Ben Ali" value={editUserForm.full_name} onChange={e => setEditUserForm(p => ({ ...p, full_name: e.target.value }))} />
+          </Field>
+          <Field label="Email">
+            <input style={inputS} type="email" placeholder="exemple@email.com" value={editUserForm.email} onChange={e => setEditUserForm(p => ({ ...p, email: e.target.value }))} />
           </Field>
           <Field label="Rôle *">
             <StyledSelect value={editUserForm.role} onChange={v => setEditUserForm(p => ({ ...p, role: v }))} style={selectS}>
@@ -501,8 +604,6 @@ export default function AdminPage() {
           <div style={{ padding: '12px', borderRadius: '10px', background: isDark ? 'rgba(168,85,247,0.1)' : 'rgba(168,85,247,0.06)', border: '1px solid rgba(168,85,247,0.2)', fontSize: '12px', color: subCol, lineHeight: 1.6 }}>
             <strong style={{ color: '#a855f7' }}>Délai d&apos;expiration</strong> — À l&apos;expiration, l&apos;opérateur ne pourra plus se connecter. Laissez vide pour un accès illimité.
           </div>
-
-          {/* Statut actuel */}
           {expiryTarget.expires_at && (() => {
             const s = getExpiryStatus(expiryTarget.expires_at!)
             return (
@@ -513,24 +614,14 @@ export default function AdminPage() {
               </div>
             )
           })()}
-
           <Field label="Nouvelle date d'expiration" hint="Laissez vide pour supprimer la limite">
-            <input
-              style={inputS}
-              type="datetime-local"
-              min={minDate}
-              value={expiryDate}
-              onChange={e => setExpiryDate(e.target.value)}
-            />
+            <input style={inputS} type="datetime-local" min={minDate} value={expiryDate} onChange={e => setExpiryDate(e.target.value)} />
           </Field>
-
           {expiryErr && <p style={{ color: '#ef4444', fontSize: '12px', background: 'rgba(239,68,68,0.1)', padding: '8px 12px', borderRadius: '8px', margin: 0 }}>{expiryErr}</p>}
-
           <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>
             <button type="button" onClick={() => { setExpiryTarget(null); setExpiryErr('') }} style={btnStyle('#7a9bc5', true)}>Annuler</button>
             {expiryDate && (
-              <button type="button" onClick={() => { setExpiryDate('') }} title="Supprimer la limite"
-                style={{ ...btnStyle('#6b7280', true), gap: '4px' }}>
+              <button type="button" onClick={() => { setExpiryDate('') }} title="Supprimer la limite" style={{ ...btnStyle('#6b7280', true), gap: '4px' }}>
                 <X size={12} /> Supprimer limite
               </button>
             )}
@@ -541,7 +632,7 @@ export default function AdminPage() {
         </Modal>
       )}
 
-      {/* ══ MODAL Reset password ══ */}
+      {/* ══ MODAL Reset password (admin) ══ */}
       {resetTarget && (
         <Modal title="Réinitialiser le mot de passe" onClose={() => { setResetTarget(null); setNewPwd('') }} isDark={isDark}>
           <p style={{ color: subCol, fontSize: '13px', margin: 0 }}>Utilisateur : <strong style={{ color: titleCol }}>{resetTarget.username}</strong></p>
@@ -554,6 +645,80 @@ export default function AdminPage() {
           <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>
             <button type="button" onClick={() => { setResetTarget(null); setNewPwd('') }} style={btnStyle('#7a9bc5', true)}>Annuler</button>
             <button type="button" onClick={handleResetPwd} disabled={savingPwd || !newPwd} style={btnStyle('#f59e0b')}>{savingPwd ? 'Enregistrement...' : 'Réinitialiser'}</button>
+          </div>
+        </Modal>
+      )}
+
+      {/* ══ MODAL Changer son propre mot de passe ══ */}
+      {showChangePwd && (
+        <Modal title="Changer mon mot de passe" onClose={() => { setShowChangePwd(false); setChangePwdErr('') }} isDark={isDark}>
+          <div style={{ padding: '12px', borderRadius: '10px', background: isDark ? 'rgba(168,85,247,0.1)' : 'rgba(168,85,247,0.06)', border: '1px solid rgba(168,85,247,0.2)', fontSize: '12px', color: subCol, lineHeight: 1.6 }}>
+            <strong style={{ color: '#a855f7' }}>🔐 Sécurité</strong> — Votre nouveau mot de passe doit contenir au moins 6 caractères.
+          </div>
+
+          <Field label="Ancien mot de passe *">
+            <div style={{ position: 'relative' }}>
+              <input
+                style={{ ...inputS, paddingRight: '40px' }}
+                type={showOldPwd ? 'text' : 'password'}
+                placeholder="••••••••"
+                value={changePwdForm.old_password}
+                onChange={e => setChangePwdForm(p => ({ ...p, old_password: e.target.value }))}
+              />
+              <button type="button" onClick={() => setShowOldPwd(p => !p)} style={{ position: 'absolute', right: '10px', top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', color: '#7a9bc5', display: 'flex' }}>
+                {showOldPwd ? <EyeOff size={15} /> : <Eye size={15} />}
+              </button>
+            </div>
+          </Field>
+
+          <Field label="Nouveau mot de passe *" hint="Minimum 6 caractères">
+            <div style={{ position: 'relative' }}>
+              <input
+                style={{ ...inputS, paddingRight: '40px' }}
+                type={showNewUserPwd ? 'text' : 'password'}
+                placeholder="••••••••"
+                value={changePwdForm.new_password}
+                onChange={e => setChangePwdForm(p => ({ ...p, new_password: e.target.value }))}
+              />
+              <button type="button" onClick={() => setShowNewUserPwd(p => !p)} style={{ position: 'absolute', right: '10px', top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', color: '#7a9bc5', display: 'flex' }}>
+                {showNewUserPwd ? <EyeOff size={15} /> : <Eye size={15} />}
+              </button>
+            </div>
+          </Field>
+
+          <Field label="Confirmer le nouveau mot de passe *">
+            <div style={{ position: 'relative' }}>
+              <input
+                style={{
+                  ...inputS, paddingRight: '40px',
+                  ...(changePwdForm.confirm && changePwdForm.new_password !== changePwdForm.confirm
+                    ? { border: '1px solid rgba(239,68,68,0.6)' } : {})
+                }}
+                type={showConfirmPwd ? 'text' : 'password'}
+                placeholder="••••••••"
+                value={changePwdForm.confirm}
+                onChange={e => setChangePwdForm(p => ({ ...p, confirm: e.target.value }))}
+              />
+              <button type="button" onClick={() => setShowConfirmPwd(p => !p)} style={{ position: 'absolute', right: '10px', top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', color: '#7a9bc5', display: 'flex' }}>
+                {showConfirmPwd ? <EyeOff size={15} /> : <Eye size={15} />}
+              </button>
+            </div>
+            {changePwdForm.confirm && changePwdForm.new_password !== changePwdForm.confirm && (
+              <p style={{ margin: '4px 0 0', fontSize: '11px', color: '#ef4444' }}>⚠ Les mots de passe ne correspondent pas</p>
+            )}
+          </Field>
+
+          {changePwdErr && (
+            <p style={{ color: '#ef4444', fontSize: '12px', background: 'rgba(239,68,68,0.1)', padding: '8px 12px', borderRadius: '8px', margin: 0 }}>
+              {changePwdErr}
+            </p>
+          )}
+
+          <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>
+            <button type="button" onClick={() => { setShowChangePwd(false); setChangePwdErr('') }} style={btnStyle('#7a9bc5', true)}>Annuler</button>
+            <button type="button" onClick={handleChangePwd} disabled={savingChangePwd} style={btnStyle('#a855f7')}>
+              <Lock size={13} />{savingChangePwd ? 'Modification...' : 'Changer le mot de passe'}
+            </button>
           </div>
         </Modal>
       )}

@@ -18,6 +18,22 @@ import { api } from '@/lib/api'
 
 const go = (path: string) => { window.location.href = path }
 
+// ✅ Map noms techniques → noms affichés (même map que prediction)
+const NODE_DISPLAY_NAMES: Record<string, string> = {
+  'jambala':  'CCN-Node-01',
+  'ttair6':   'AIR-Node-01',
+  'ttsdp17a': 'SDP-Node-01',
+  'ttvs3a':   'VS-Node-01',
+  'ttocc1':   'OCC-Node-01',
+  'ttaf1':    'AF-Node-01',
+}
+
+// ✅ Convertit un nom technique en nom affiché
+const dn = (name: string) => NODE_DISPLAY_NAMES[name] || name
+
+// ✅ Convertit une liste de noms techniques en noms affichés
+const dnList = (names: string[]) => names.map(dn)
+
 export default function DashboardPage() {
   const [summary, setSummary]         = useState<SummaryResponse | null>(null)
   const [correlation, setCorrelation] = useState<CorrelationResponse | null>(null)
@@ -105,10 +121,17 @@ export default function DashboardPage() {
 
         {/* Stats Row */}
         <div className="grid grid-cols-4 gap-4">
-          <StatCard title="Total Noeuds"   value={summary?.total_nodes ?? 0} icon={Server}       variant="default"  />
-          <StatCard title="Critiques"       value={summary?.CRITICAL ?? 0}    icon={AlertCircle}  variant="critical" subtitle={summary?.critical_nodes.join(', ') || 'Aucun'} />
-          <StatCard title="Avertissements" value={summary?.WARNING ?? 0}     icon={AlertTriangle} variant="warning"  subtitle={summary?.warning_nodes.join(', ') || 'Aucun'} />
-          <StatCard title="Normaux"         value={summary?.NORMAL ?? 0}      icon={CheckCircle}  variant="success"  />
+          <StatCard title="Total Noeuds"   value={summary?.total_nodes ?? 0} icon={Server}        variant="default"  />
+          {/* ✅ subtitle avec noms affichés */}
+          <StatCard title="Critiques"       value={summary?.CRITICAL ?? 0}    icon={AlertCircle}   variant="critical"
+            subtitle={summary?.critical_nodes && summary.critical_nodes.length > 0
+              ? dnList(summary.critical_nodes).join(', ')
+              : 'Aucun'} />
+          <StatCard title="Avertissements" value={summary?.WARNING ?? 0}     icon={AlertTriangle}  variant="warning"
+            subtitle={summary?.warning_nodes && summary.warning_nodes.length > 0
+              ? dnList(summary.warning_nodes).join(', ')
+              : 'Aucun'} />
+          <StatCard title="Normaux"         value={summary?.NORMAL ?? 0}      icon={CheckCircle}   variant="success"  />
         </div>
 
         {/* Correlation */}
@@ -124,19 +147,24 @@ export default function DashboardPage() {
           <Panel title="Chaîne d&apos;impact" icon={ArrowRight} className="col-span-1">
             {correlation?.chaine_impact && correlation.chaine_impact.length > 0 ? (
               <div className="flex items-center gap-2 flex-wrap">
-                {correlation.chaine_impact.map((node, index) => (
-                  <div key={node} className="flex items-center gap-2">
-                    <button
-                      onClick={() => go(`/noeuds/${node.split(' ')[0]}`)}
-                      className="px-3 py-2 rounded-lg bg-[#ff3b5c]/20 text-[#ff3b5c] font-semibold hover:bg-[#ff3b5c]/30 transition-all hover:scale-105 cursor-pointer border-0"
-                    >
-                      {node}
-                    </button>
-                    {index < correlation.chaine_impact.length - 1 && (
-                      <ArrowRight className="h-4 w-4 text-muted-foreground" />
-                    )}
-                  </div>
-                ))}
+                {correlation.chaine_impact.map((node, index) => {
+                  // ✅ node peut contenir "jambala (CCN)" → on extrait le nom technique
+                  const techName = node.split(' ')[0]
+                  const displayLabel = node.replace(techName, dn(techName))
+                  return (
+                    <div key={node} className="flex items-center gap-2">
+                      <button
+                        onClick={() => go(`/noeuds/${techName}`)}
+                        className="px-3 py-2 rounded-lg bg-[#ff3b5c]/20 text-[#ff3b5c] font-semibold hover:bg-[#ff3b5c]/30 transition-all hover:scale-105 cursor-pointer border-0"
+                      >
+                        {displayLabel}
+                      </button>
+                      {index < correlation.chaine_impact.length - 1 && (
+                        <ArrowRight className="h-4 w-4 text-muted-foreground" />
+                      )}
+                    </div>
+                  )
+                })}
               </div>
             ) : (
               <p className="text-muted-foreground">Aucune chaîne d&apos;impact</p>
@@ -152,7 +180,8 @@ export default function DashboardPage() {
                     onClick={() => go(`/noeuds/${node}`)}
                     className="px-3 py-2 rounded-lg glass-card border border-primary/30 text-foreground font-medium hover:border-primary/60 transition-all hover:scale-105 flex items-center gap-1.5 cursor-pointer"
                   >
-                    {node}
+                    {/* ✅ Affiche display_name */}
+                    {dn(node)}
                     <ExternalLink className="h-3 w-3 text-primary" />
                   </button>
                 ))
@@ -183,7 +212,9 @@ export default function DashboardPage() {
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 mb-1">
                         <RoleBadge role={anomaly.role} size="sm" />
-                        <span className="font-semibold text-foreground">{anomaly.node}</span>
+                        {/* ✅ Affiche display_name dans les anomalies */}
+                        <span className="font-semibold text-foreground">{dn(anomaly.node)}</span>
+
                       </div>
                       <p className="text-sm text-muted-foreground truncate">{anomaly.message}</p>
                       <p className="text-xs text-muted-foreground mt-1">
@@ -203,73 +234,34 @@ export default function DashboardPage() {
             )}
           </Panel>
 
-          {/* Actions rapides */}
+          {/* Actions rapides — identique à l'original */}
           <Panel title="Actions rapides" icon={Zap} variant="default" className="col-span-1">
             <div className="space-y-3">
-              <div
-                onClick={() => go('/noeuds')}
-                style={{ cursor: 'pointer' }}
-                className="flex items-center gap-3 p-4 rounded-xl glass-card border border-border/50 hover:border-primary/50 transition-all group hover:scale-[1.02]"
-              >
-                <div className="p-2.5 rounded-lg bg-primary/20 group-hover:bg-primary/30 transition-colors">
-                  <Server className="h-5 w-5 text-primary" />
-                </div>
-                <div className="flex-1">
-                  <p className="font-semibold text-foreground">Voir les noeuds</p>
-                  <p className="text-sm text-muted-foreground">État de tous les serveurs</p>
-                </div>
+              <div onClick={() => go('/noeuds')} style={{ cursor: 'pointer' }} className="flex items-center gap-3 p-4 rounded-xl glass-card border border-border/50 hover:border-primary/50 transition-all group hover:scale-[1.02]">
+                <div className="p-2.5 rounded-lg bg-primary/20 group-hover:bg-primary/30 transition-colors"><Server className="h-5 w-5 text-primary" /></div>
+                <div className="flex-1"><p className="font-semibold text-foreground">Voir les noeuds</p><p className="text-sm text-muted-foreground">État de tous les serveurs</p></div>
                 <ArrowRight className="h-4 w-4 text-muted-foreground group-hover:text-primary group-hover:translate-x-1 transition-all" />
               </div>
-
-              <div
-                onClick={() => go('/inventaire')}
-                style={{ cursor: 'pointer' }}
-                className="flex items-center gap-3 p-4 rounded-xl glass-card border border-border/50 hover:border-[#a855f7]/50 transition-all group hover:scale-[1.02]"
-              >
-                <div className="p-2.5 rounded-lg bg-[#a855f7]/20 group-hover:bg-[#a855f7]/30 transition-colors">
-                  <Database className="h-5 w-5 text-[#a855f7]" />
-                </div>
-                <div className="flex-1">
-                  <p className="font-semibold text-foreground">Inventaire</p>
-                  <p className="text-sm text-muted-foreground">Configuration système</p>
-                </div>
+              <div onClick={() => go('/inventaire')} style={{ cursor: 'pointer' }} className="flex items-center gap-3 p-4 rounded-xl glass-card border border-border/50 hover:border-[#a855f7]/50 transition-all group hover:scale-[1.02]">
+                <div className="p-2.5 rounded-lg bg-[#a855f7]/20 group-hover:bg-[#a855f7]/30 transition-colors"><Database className="h-5 w-5 text-[#a855f7]" /></div>
+                <div className="flex-1"><p className="font-semibold text-foreground">Inventaire</p><p className="text-sm text-muted-foreground">Configuration système</p></div>
                 <ArrowRight className="h-4 w-4 text-muted-foreground group-hover:text-[#a855f7] group-hover:translate-x-1 transition-all" />
               </div>
-
-              <div
-                onClick={() => go('/prediction')}
-                style={{ cursor: 'pointer' }}
-                className="flex items-center gap-3 p-4 rounded-xl glass-card border border-border/50 hover:border-accent/50 transition-all group hover:scale-[1.02]"
-              >
-                <div className="p-2.5 rounded-lg bg-accent/20 group-hover:bg-accent/30 transition-colors">
-                  <TrendingUp className="h-5 w-5 text-accent" />
-                </div>
-                <div className="flex-1">
-                  <p className="font-semibold text-foreground">Prédictions</p>
-                  <p className="text-sm text-muted-foreground">Analyse prédictive SDP</p>
-                </div>
+              <div onClick={() => go('/prediction')} style={{ cursor: 'pointer' }} className="flex items-center gap-3 p-4 rounded-xl glass-card border border-border/50 hover:border-accent/50 transition-all group hover:scale-[1.02]">
+                <div className="p-2.5 rounded-lg bg-accent/20 group-hover:bg-accent/30 transition-colors"><TrendingUp className="h-5 w-5 text-accent" /></div>
+                <div className="flex-1"><p className="font-semibold text-foreground">Prédictions</p><p className="text-sm text-muted-foreground">Analyse prédictive SDP</p></div>
                 <ArrowRight className="h-4 w-4 text-muted-foreground group-hover:text-accent group-hover:translate-x-1 transition-all" />
               </div>
-
-              <div
-                onClick={() => go('/assistant')}
-                style={{ cursor: 'pointer' }}
-                className="flex items-center gap-3 p-4 rounded-xl glass-card border border-border/50 hover:border-[#ffb020]/50 transition-all group hover:scale-[1.02]"
-              >
-                <div className="p-2.5 rounded-lg bg-[#ffb020]/20 group-hover:bg-[#ffb020]/30 transition-colors">
-                  <MessageSquare className="h-5 w-5 text-[#ffb020]" />
-                </div>
-                <div className="flex-1">
-                  <p className="font-semibold text-foreground">Assistant</p>
-                  <p className="text-sm text-muted-foreground">Chatbot intelligent</p>
-                </div>
+              <div onClick={() => go('/assistant')} style={{ cursor: 'pointer' }} className="flex items-center gap-3 p-4 rounded-xl glass-card border border-border/50 hover:border-[#ffb020]/50 transition-all group hover:scale-[1.02]">
+                <div className="p-2.5 rounded-lg bg-[#ffb020]/20 group-hover:bg-[#ffb020]/30 transition-colors"><MessageSquare className="h-5 w-5 text-[#ffb020]" /></div>
+                <div className="flex-1"><p className="font-semibold text-foreground">Assistant</p><p className="text-sm text-muted-foreground">Chatbot intelligent</p></div>
                 <ArrowRight className="h-4 w-4 text-muted-foreground group-hover:text-[#ffb020] group-hover:translate-x-1 transition-all" />
               </div>
             </div>
           </Panel>
         </div>
 
-        {/* Summary Bar */}
+        {/* Summary Bar — identique à l'original */}
         <div className="glass-card gradient-border rounded-xl p-5">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-8">
@@ -290,7 +282,12 @@ export default function DashboardPage() {
               <div className="h-12 w-px bg-border/50" />
               <div>
                 <p className="section-title mb-1">Sources</p>
-                <p className="text-2xl font-heading font-bold text-foreground">{correlation?.sources?.join(', ') || 'N/A'}</p>
+                {/* ✅ Sources avec noms affichés */}
+                <p className="text-2xl font-heading font-bold text-foreground">
+                  {correlation?.sources
+                    ? dnList(correlation.sources).join(', ')
+                    : 'N/A'}
+                </p>
               </div>
             </div>
             <div className="text-right">

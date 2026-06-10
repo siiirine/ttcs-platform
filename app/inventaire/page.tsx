@@ -100,45 +100,52 @@ export default function InventoryPage() {
 
         {/* Nodes Grid */}
         <div className="grid grid-cols-3 gap-4">
-          {nodes.map(([name, node]) => (
-            <Link key={name} href={`/noeuds/${name}`} style={{ textDecoration: 'none' }}>
-              <div style={{
-                background: c.cardBg, border: `1px solid ${c.border}`,
-                borderRadius: '14px', padding: '24px',
-                boxShadow: c.shadow, transition: 'all 0.25s ease', cursor: 'pointer',
-              }}
-                onMouseEnter={e => {
-                  (e.currentTarget as HTMLElement).style.transform = 'translateY(-4px)'
-                  ;(e.currentTarget as HTMLElement).style.boxShadow = c.shadowHover
+          {nodes.map(([name, node]) => {
+            // ✅ display_name depuis l'API inventory
+            const displayName = (node as any).display_name || name
+            return (
+              <Link key={name} href={`/noeuds/${name}`} style={{ textDecoration: 'none' }}>
+                <div style={{
+                  background: c.cardBg, border: `1px solid ${c.border}`,
+                  borderRadius: '14px', padding: '24px',
+                  boxShadow: c.shadow, transition: 'all 0.25s ease', cursor: 'pointer',
                 }}
-                onMouseLeave={e => {
-                  (e.currentTarget as HTMLElement).style.transform = 'translateY(0)'
-                  ;(e.currentTarget as HTMLElement).style.boxShadow = c.shadow
-                }}
-              >
-                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '16px' }}>
-                  <div style={{ padding: '12px', borderRadius: '12px', background: 'rgba(0,130,240,0.12)' }}>
-                    <Server size={22} style={{ color: '#0082f0' }} />
+                  onMouseEnter={e => {
+                    (e.currentTarget as HTMLElement).style.transform = 'translateY(-4px)'
+                    ;(e.currentTarget as HTMLElement).style.boxShadow = c.shadowHover
+                  }}
+                  onMouseLeave={e => {
+                    (e.currentTarget as HTMLElement).style.transform = 'translateY(0)'
+                    ;(e.currentTarget as HTMLElement).style.boxShadow = c.shadow
+                  }}
+                >
+                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '16px' }}>
+                    <div style={{ padding: '12px', borderRadius: '12px', background: 'rgba(0,130,240,0.12)' }}>
+                      <Server size={22} style={{ color: '#0082f0' }} />
+                    </div>
+                    <RoleBadge role={node.role} size="md" />
                   </div>
-                  <RoleBadge role={node.role} size="md" />
-                </div>
-                <h3 style={{ fontSize: '1.2rem', fontWeight: 800, color: c.textPrimary, marginBottom: '8px' }}>{name}</h3>
-                <p style={{ fontSize: '13px', color: c.textSecondary, marginBottom: '16px', lineHeight: 1.5 }}>
-                  {node.description || ROLE_DESCRIPTIONS[node.role] || 'Composant du système de facturation'}
-                </p>
-                <div style={{ paddingTop: '12px', borderTop: `1px solid ${c.borderSubtle}`, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '13px', color: c.textSecondary }}>
-                    <Network size={14} style={{ color: '#0082f0' }} />
-                    <span>Port: </span>
-                    <span style={{ fontFamily: 'monospace', fontWeight: 700, color: c.textPrimary }}>{node.port}</span>
+                  {/* ✅ Affiche display_name en grand */}
+                  <h3 style={{ fontSize: '1.2rem', fontWeight: 800, color: c.textPrimary, marginBottom: '2px' }}>{displayName}</h3>
+                  {/* ✅ Nom technique en petit si différent */}
+ 
+                  <p style={{ fontSize: '13px', color: c.textSecondary, marginBottom: '16px', lineHeight: 1.5 }}>
+                    {node.description || ROLE_DESCRIPTIONS[node.role] || 'Composant du système de facturation'}
+                  </p>
+                  <div style={{ paddingTop: '12px', borderTop: `1px solid ${c.borderSubtle}`, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '13px', color: c.textSecondary }}>
+                      <Network size={14} style={{ color: '#0082f0' }} />
+                      <span>Port: </span>
+                      <span style={{ fontFamily: 'monospace', fontWeight: 700, color: c.textPrimary }}>{node.port}</span>
+                    </div>
+                    <span style={{ fontSize: '13px', color: '#0082f0', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '4px' }}>
+                      Détails <ExternalLink size={12} />
+                    </span>
                   </div>
-                  <span style={{ fontSize: '13px', color: '#0082f0', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '4px' }}>
-                    Détails <ExternalLink size={12} />
-                  </span>
                 </div>
-              </div>
-            </Link>
-          ))}
+              </Link>
+            )
+          })}
         </div>
 
         {/* Architecture */}
@@ -151,13 +158,20 @@ export default function InventoryPage() {
           </div>
           <div style={{ padding: '24px' }}>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(6, 1fr)', gap: '12px', marginBottom: '20px' }}>
-              {nodes.map(([name, node]) => (
-                <div key={name} style={{ textAlign: 'center', background: c.panelBg, borderRadius: '10px', padding: '16px', border: `1px solid ${c.border}` }}>
-                  <div style={{ marginBottom: '10px' }}><RoleBadge role={node.role} size="sm" /></div>
-                  <p style={{ fontSize: '13px', fontWeight: 700, color: c.textPrimary }}>{name}</p>
-                  <p style={{ fontSize: '11px', color: c.textSecondary, marginTop: '4px' }}>Port {node.port}</p>
-                </div>
-              ))}
+              {nodes.map(([name, node]) => {
+                // ✅ display_name dans la section architecture aussi
+                const displayName = (node as any).display_name || name
+                return (
+                  <div key={name} style={{ textAlign: 'center', background: c.panelBg, borderRadius: '10px', padding: '16px', border: `1px solid ${c.border}` }}>
+                    <div style={{ marginBottom: '10px' }}><RoleBadge role={node.role} size="sm" /></div>
+                    {/* ✅ Nom affiché en grand */}
+                    <p style={{ fontSize: '12px', fontWeight: 700, color: c.textPrimary }}>{displayName}</p>
+                    {/* ✅ Nom technique en tout petit si différent */}
+                   
+                    <p style={{ fontSize: '11px', color: c.textSecondary, marginTop: '4px' }}>Port {node.port}</p>
+                  </div>
+                )
+              })}
             </div>
             <div style={{ padding: '16px', borderRadius: '12px', background: c.panelBg, border: `1px solid rgba(0,130,240,0.2)` }}>
               <p style={{ fontSize: '13px', color: c.textSecondary, lineHeight: 1.7 }}>

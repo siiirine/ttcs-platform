@@ -65,9 +65,12 @@ export default function NodesPage() {
 
   const exportCSV = () => {
     if (!statusData) return
-    const headers = ['Noeud', 'Rôle', 'HW', 'OS', 'APP', 'Statut Global', 'Problèmes']
+    const headers = ['Noeud', 'Nom affiché', 'Rôle', 'HW', 'OS', 'APP', 'Statut Global', 'Problèmes']
     const rows = Object.entries(statusData.nodes).map(([name, node]) => [
-      name, node.role, node.hw.status, node.os.status, node.app.status,
+      name,
+      // ✅ display_name dans le CSV aussi
+      (node as any).display_name || name,
+      node.role, node.hw.status, node.os.status, node.app.status,
       node.global_status,
       [...node.hw.issues, ...node.os.issues, ...node.app.issues].join('; '),
     ])
@@ -174,16 +177,18 @@ export default function NodesPage() {
 
 function NodeCard({ name, node }: { name: string; node: NodeStatus }) {
   const c = useThemeColors()
-  const borderColors = { CRITICAL: '#ef4444', WARNING: '#f59e0b', NORMAL: '#10b981' }
+  const borderColors: Record<string, string> = { CRITICAL: '#ef4444', WARNING: '#f59e0b', NORMAL: '#10b981', UNKNOWN: '#6b7280' }
   const getStatusPercent = (status: string) => status === 'CRITICAL' ? 100 : status === 'WARNING' ? 60 : 30
   const allIssues = [...node.hw.issues, ...node.os.issues, ...node.app.issues]
+  // ✅ Nom affiché : display_name si disponible, sinon name technique
+  const displayName = (node as any).display_name || name
 
   return (
     <Link href={`/noeuds/${name}`} style={{ textDecoration: 'none' }}>
       <div style={{
         background: c.cardBg,
         border: `1px solid ${c.border}`,
-        borderTop: `4px solid ${borderColors[node.global_status]}`,
+        borderTop: `4px solid ${borderColors[node.global_status] ?? '#6b7280'}`,
         borderRadius: '14px', padding: '20px',
         transition: 'all 0.25s ease', cursor: 'pointer',
         boxShadow: c.shadow,
@@ -199,8 +204,13 @@ function NodeCard({ name, node }: { name: string; node: NodeStatus }) {
       >
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '16px' }}>
           <div>
-            <h3 style={{ fontSize: '1.2rem', fontWeight: 800, color: c.textPrimary, marginBottom: '6px' }}>{name}</h3>
-            <RoleBadge role={node.role} size="sm" />
+            {/* ✅ Affiche display_name au lieu de name */}
+            <h3 style={{ fontSize: '1.2rem', fontWeight: 800, color: c.textPrimary, marginBottom: '2px' }}>{displayName}</h3>
+            {/* ✅ Nom technique en petit en dessous */}
+            
+            <div style={{ marginTop: '6px' }}>
+              <RoleBadge role={node.role} size="sm" />
+            </div>
           </div>
           <StatusBadge status={node.global_status} size="sm" pulse={node.global_status === 'CRITICAL'} />
         </div>
@@ -229,6 +239,8 @@ function NodeCard({ name, node }: { name: string; node: NodeStatus }) {
 function NodeRow({ name, node }: { name: string; node: NodeStatus }) {
   const c = useThemeColors()
   const allIssues = [...node.hw.issues, ...node.os.issues, ...node.app.issues]
+  // ✅ Nom affiché : display_name si disponible, sinon name technique
+  const displayName = (node as any).display_name || name
 
   return (
     <tr style={{ borderBottom: `1px solid ${c.borderSubtle}` }}
@@ -236,7 +248,11 @@ function NodeRow({ name, node }: { name: string; node: NodeStatus }) {
       onMouseLeave={e => (e.currentTarget as HTMLElement).style.background = 'transparent'}
     >
       <td style={{ padding: '14px 16px' }}>
-        <Link href={`/noeuds/${name}`} style={{ color: '#0082f0', fontWeight: 700, textDecoration: 'none' }}>{name}</Link>
+        <Link href={`/noeuds/${name}`} style={{ textDecoration: 'none' }}>
+          {/* ✅ Affiche display_name, nom technique en petit en dessous */}
+          <div style={{ fontWeight: 700, color: '#0082f0' }}>{displayName}</div>
+          
+        </Link>
       </td>
       <td style={{ padding: '14px 16px' }}><RoleBadge role={node.role} size="sm" /></td>
       <td style={{ padding: '14px 16px', textAlign: 'center' }}><StatusBadge status={node.hw.status} size="sm" /></td>

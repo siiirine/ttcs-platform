@@ -1,6 +1,7 @@
 import type { Metadata } from 'next'
 import { Sora, Source_Sans_3 } from 'next/font/google'
 import { ThemeProvider } from 'next-themes'
+import { LanguageProvider } from '@/lib/language-context'
 import './globals.css'
 
 const sora = Sora({
@@ -18,27 +19,17 @@ const sourceSans = Source_Sans_3({
 export const metadata: Metadata = {
   title: 'TTCS Platform - Monitoring Ericsson Charging System',
   description: 'Plateforme de supervision des serveurs Ericsson Charging System pour Tunisie Telecom',
-  icons: {
-    icon: '/ericsson.jpg',
-    apple: '/ericsson.jpg',
-  },
+  icons: { icon: '/ericsson.jpg', apple: '/ericsson.jpg' },
 }
 
-export default function RootLayout({
-  children,
-}: Readonly<{
-  children: React.ReactNode
-}>) {
+export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   return (
     <html lang="fr" suppressHydrationWarning>
       <body className={`${sora.variable} ${sourceSans.variable} font-sans antialiased`}>
-        <ThemeProvider
-          attribute="class"
-          defaultTheme="light"
-          enableSystem={false}
-          storageKey="ttcs-theme"
-        >
-          {children}
+        <ThemeProvider attribute="class" defaultTheme="light" enableSystem={false} storageKey="ttcs-theme">
+          <LanguageProvider>
+            {children}
+          </LanguageProvider>
         </ThemeProvider>
       </body>
     </html>

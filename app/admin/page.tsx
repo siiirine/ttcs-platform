@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import { useLang } from '@/lib/language-context'
 import { useTheme } from 'next-themes'
 import { DashboardLayout } from '@/components/dashboard/dashboard-layout'
 import { adminApi, User, NodeAdmin } from '@/lib/api'
@@ -30,13 +31,13 @@ function getCookie(name: string): string {
   return match ? decodeURIComponent(match[2]) : ''
 }
 
-// ✅ Calcule le statut d'expiration
-function getExpiryStatus(expires_at: string | null): { label: string; color: string; bg: string } {
-  if (!expires_at) return { label: 'Illimité', color: '#00d4aa', bg: 'rgba(0,212,170,0.12)' }
+// ✅ t passé en paramètre — évite le problème de scope
+function getExpiryStatus(expires_at: string | null, translate: (s: string, k: string) => string): { label: string; color: string; bg: string } {
+  if (!expires_at) return { label: translate('admin', 'unlimited'), color: '#00d4aa', bg: 'rgba(0,212,170,0.12)' }
   const exp = new Date(expires_at)
   const now = new Date()
   const diff = exp.getTime() - now.getTime()
-  if (diff <= 0) return { label: 'Expiré', color: '#ef4444', bg: 'rgba(239,68,68,0.12)' }
+  if (diff <= 0) return { label: translate('admin', 'expired'), color: '#ef4444', bg: 'rgba(239,68,68,0.12)' }
   const days = Math.ceil(diff / 86400000)
   if (days <= 7) return { label: `${days}j restant${days > 1 ? 's' : ''}`, color: '#f59e0b', bg: 'rgba(245,158,11,0.12)' }
   return { label: exp.toLocaleDateString('fr-FR'), color: '#0082f0', bg: 'rgba(0,130,240,0.1)' }
@@ -47,11 +48,12 @@ function Badge({ role }: { role: string }) {
   return <span style={{ background: `${c}22`, color: c, border: `1px solid ${c}44`, borderRadius: '6px', padding: '2px 8px', fontSize: '11px', fontWeight: 700 }}>{role}</span>
 }
 
-function RoleBadge({ role }: { role: string }) {
+// ✅ RoleBadge reçoit translate en prop — plus de dépendance externe à t
+function RoleBadge({ role, translate }: { role: string; translate: (s: string, k: string) => string }) {
   const isAdmin = role === 'admin'
   return (
     <span style={{ background: isAdmin ? 'rgba(239,68,68,0.15)' : 'rgba(0,130,240,0.15)', color: isAdmin ? '#ef4444' : '#0082f0', border: `1px solid ${isAdmin ? 'rgba(239,68,68,0.4)' : 'rgba(0,130,240,0.4)'}`, borderRadius: '6px', padding: '2px 10px', fontSize: '11px', fontWeight: 700 }}>
-      {isAdmin ? 'Admin' : 'Opérateur'}
+      {isAdmin ? translate('admin', 'admin') : translate('admin', 'operator')}
     </span>
   )
 }
@@ -95,6 +97,7 @@ function btnStyle(color: string, outline = false): React.CSSProperties {
 
 export default function AdminPage() {
   const isDark = useIsDark()
+  const { t } = useLang()
 
   const cardBg     = isDark ? 'rgba(26,29,46,0.97)'    : 'rgba(255,255,255,0.9)'
   const cardBorder = isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,130,240,0.15)'
@@ -126,26 +129,22 @@ export default function AdminPage() {
   const [toast, setToast] = useState<{ msg: string; ok: boolean } | null>(null)
   const showToast = (msg: string, ok = true) => { setToast({ msg, ok }); setTimeout(() => setToast(null), 3500) }
 
-  // ✅ Create user — seulement full_name + email + role
   const [showCreate, setShowCreate] = useState(false)
   const [newUser, setNewUser] = useState({ full_name: '', email: '', role: 'operator' })
   const [roleTouched, setRoleTouched] = useState(false)
   const [savingCreate, setSavingCreate] = useState(false)
   const [createErr, setCreateErr] = useState('')
 
-  // Edit user
   const [editUser, setEditUser] = useState<User | null>(null)
   const [editUserForm, setEditUserForm] = useState({ full_name: '', email: '', role: '' })
   const [savingEditUser, setSavingEditUser] = useState(false)
   const [editUserErr, setEditUserErr] = useState('')
 
-  // Reset pwd (admin)
   const [resetTarget, setResetTarget] = useState<User | null>(null)
   const [newPwd, setNewPwd] = useState('')
   const [showNewPwd, setShowNewPwd] = useState(false)
   const [savingPwd, setSavingPwd] = useState(false)
 
-  // ✅ Changer son propre mot de passe
   const [showChangePwd, setShowChangePwd] = useState(false)
   const [changePwdForm, setChangePwdForm] = useState({ old_password: '', new_password: '', confirm: '' })
   const [showOldPwd, setShowOldPwd] = useState(false)
@@ -154,13 +153,11 @@ export default function AdminPage() {
   const [savingChangePwd, setSavingChangePwd] = useState(false)
   const [changePwdErr, setChangePwdErr] = useState('')
 
-  // Expiration
   const [expiryTarget, setExpiryTarget] = useState<User | null>(null)
   const [expiryDate, setExpiryDate]     = useState('')
   const [savingExpiry, setSavingExpiry] = useState(false)
   const [expiryErr, setExpiryErr]       = useState('')
 
-  // Create node
   const [showCreateNode, setShowCreateNode] = useState(false)
   const [newNode, setNewNode] = useState({ name: '', role: 'CCN', description: '', ip_address: '', server_type: '', port: '' })
   const [ipTouched, setIpTouched] = useState(false)
@@ -168,15 +165,14 @@ export default function AdminPage() {
   const [savingNode, setSavingNode] = useState(false)
   const [nodeErr, setNodeErr] = useState('')
 
-  // Edit node
   const [editNode, setEditNode] = useState<NodeAdmin | null>(null)
   const [editNodeForm, setEditNodeForm] = useState({ role: '', description: '', ip_address: '', server_type: '', port: '' })
   const [savingEditNode, setSavingEditNode] = useState(false)
   const [editNodeErr, setEditNodeErr] = useState('')
 
-  const createRoleErr = roleTouched && !newUser.role ? 'Le rôle est obligatoire' : ''
-  const ipErr = ipTouched && !newNode.ip_address.trim() ? "L'adresse IP est obligatoire" : ''
-  const stErr = stTouched && !newNode.server_type.trim() ? 'Le type de serveur est obligatoire' : ''
+  const createRoleErr = roleTouched && !newUser.role ? t('admin', 'roleRequired') : ''
+  const ipErr = ipTouched && !newNode.ip_address.trim() ? t('admin', 'ipRequired') : ''
+  const stErr = stTouched && !newNode.server_type.trim() ? t('admin', 'serverTypeRequired') : ''
 
   const fetchUsers = async () => {
     setLoadingU(true)
@@ -192,60 +188,38 @@ export default function AdminPage() {
   }
   useEffect(() => { fetchUsers(); fetchNodes() }, [])
 
-  // ✅ Création user simplifiée — full_name + email + role
   const handleCreate = async () => {
     setCreateErr('')
-    if (!newUser.full_name.trim()) { setCreateErr('Le nom complet est obligatoire'); return }
-    if (!newUser.email.trim()) { setCreateErr("L'adresse email est obligatoire"); return }
-    if (!newUser.email.includes('@') || newUser.email.indexOf('@') === 0) { setCreateErr("L'adresse email est invalide"); return }
-    if (!newUser.role) { setCreateErr('Le rôle est obligatoire'); setRoleTouched(true); return }
+    if (!newUser.full_name.trim()) { setCreateErr(t('admin', 'fullNameRequired')); return }
+    if (!newUser.email.trim()) { setCreateErr(t('admin', 'emailRequired')); return }
+    if (!newUser.email.includes('@') || newUser.email.indexOf('@') === 0) { setCreateErr(t('admin', 'emailInvalid')); return }
+    if (!newUser.role) { setCreateErr(t('admin', 'roleRequired')); setRoleTouched(true); return }
     setSavingCreate(true)
     try {
       const result = await fetch(`${BASE_URL}/admin/users`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${getCookie('ttcs_token')}`,
-        },
-        body: JSON.stringify({
-          full_name: newUser.full_name.trim(),
-          email: newUser.email.trim().toLowerCase(),
-          role: newUser.role,
-        }),
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${getCookie('ttcs_token')}` },
+        body: JSON.stringify({ full_name: newUser.full_name.trim(), email: newUser.email.trim().toLowerCase(), role: newUser.role }),
       })
       const data = await result.json()
       if (!result.ok) throw new Error(data.detail || 'Erreur lors de la création')
-
-      const emailMsg = data.email_sent ? ' — Email envoyé ✉️' : ' — Email non envoyé (vérifier config)'
+      const emailMsg = data.email_sent ? ' — Email envoyé ✉️' : ' — Email non envoyé'
       showToast(`Utilisateur "${data.user.username}" créé${emailMsg}`)
-      setShowCreate(false)
-      setNewUser({ full_name: '', email: '', role: 'operator' })
-      setRoleTouched(false)
-      fetchUsers()
+      setShowCreate(false); setNewUser({ full_name: '', email: '', role: 'operator' }); setRoleTouched(false); fetchUsers()
     } catch (e) { setCreateErr(e instanceof Error ? e.message : 'Erreur') }
     finally { setSavingCreate(false) }
   }
 
-  const openEditUser = (u: User) => {
-    setEditUser(u)
-    setEditUserForm({ full_name: u.full_name || '', email: u.email || '', role: u.role })
-    setEditUserErr('')
-  }
+  const openEditUser = (u: User) => { setEditUser(u); setEditUserForm({ full_name: u.full_name || '', email: u.email || '', role: u.role }); setEditUserErr('') }
 
   const handleEditUser = async () => {
     if (!editUser) return; setEditUserErr('')
-    if (editUserForm.email && !editUserForm.email.includes('@')) { setEditUserErr("L'adresse email est invalide"); return }
-    if (!editUserForm.role) { setEditUserErr('Le rôle est obligatoire'); return }
+    if (editUserForm.email && !editUserForm.email.includes('@')) { setEditUserErr(t('admin', 'emailInvalid')); return }
+    if (!editUserForm.role) { setEditUserErr(t('admin', 'roleRequired')); return }
     setSavingEditUser(true)
     try {
-      await adminApi.updateUser(editUser.id, {
-        full_name: editUserForm.full_name || undefined,
-        email: editUserForm.email ? editUserForm.email.trim().toLowerCase() : undefined,
-        role: editUserForm.role
-      })
-      showToast(`"${editUser.username}" modifié`)
-      setEditUser(null)
-      fetchUsers()
+      await adminApi.updateUser(editUser.id, { full_name: editUserForm.full_name || undefined, email: editUserForm.email ? editUserForm.email.trim().toLowerCase() : undefined, role: editUserForm.role })
+      showToast(`"${editUser.username}" modifié`); setEditUser(null); fetchUsers()
     } catch (e) { setEditUserErr(e instanceof Error ? e.message : 'Erreur') }
     finally { setSavingEditUser(false) }
   }
@@ -258,40 +232,27 @@ export default function AdminPage() {
 
   const handleResetPwd = async () => {
     if (!resetTarget || !newPwd) return; setSavingPwd(true)
-    try {
-      await adminApi.resetPassword(resetTarget.id, newPwd)
-      showToast(`Mot de passe de "${resetTarget.username}" réinitialisé`)
-      setResetTarget(null); setNewPwd('')
-    }
+    try { await adminApi.resetPassword(resetTarget.id, newPwd); showToast(`Mot de passe de "${resetTarget.username}" réinitialisé`); setResetTarget(null); setNewPwd('') }
     catch (e) { showToast(e instanceof Error ? e.message : 'Erreur', false) }
     finally { setSavingPwd(false) }
   }
 
-  // ✅ Changer son propre mot de passe
   const handleChangePwd = async () => {
     setChangePwdErr('')
-    if (!changePwdForm.old_password) { setChangePwdErr("L'ancien mot de passe est requis"); return }
-    if (!changePwdForm.new_password) { setChangePwdErr('Le nouveau mot de passe est requis'); return }
-    if (changePwdForm.new_password.length < 6) { setChangePwdErr('Le nouveau mot de passe doit contenir au moins 6 caractères'); return }
-    if (changePwdForm.new_password !== changePwdForm.confirm) { setChangePwdErr('Les mots de passe ne correspondent pas'); return }
+    if (!changePwdForm.old_password) { setChangePwdErr(t('admin', 'oldPwdRequired')); return }
+    if (!changePwdForm.new_password) { setChangePwdErr(t('admin', 'newPwdRequired')); return }
+    if (changePwdForm.new_password.length < 6) { setChangePwdErr(t('admin', 'min6')); return }
+    if (changePwdForm.new_password !== changePwdForm.confirm) { setChangePwdErr(t('admin', 'passwordsNoMatch')); return }
     setSavingChangePwd(true)
     try {
       const res = await fetch(`${BASE_URL}/auth/change-password`, {
         method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${getCookie('ttcs_token')}`,
-        },
-        body: JSON.stringify({
-          old_password: changePwdForm.old_password,
-          new_password: changePwdForm.new_password,
-        }),
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${getCookie('ttcs_token')}` },
+        body: JSON.stringify({ old_password: changePwdForm.old_password, new_password: changePwdForm.new_password }),
       })
       const data = await res.json()
       if (!res.ok) throw new Error(data.detail || 'Erreur')
-      showToast('✅ Mot de passe modifié avec succès')
-      setShowChangePwd(false)
-      setChangePwdForm({ old_password: '', new_password: '', confirm: '' })
+      showToast('✅ Mot de passe modifié avec succès'); setShowChangePwd(false); setChangePwdForm({ old_password: '', new_password: '', confirm: '' })
     } catch (e) { setChangePwdErr(e instanceof Error ? e.message : 'Erreur') }
     finally { setSavingChangePwd(false) }
   }
@@ -299,12 +260,9 @@ export default function AdminPage() {
   const openExpiry = (u: User) => {
     setExpiryTarget(u); setExpiryErr('')
     if (u.expires_at) {
-      const d = new Date(u.expires_at)
-      const pad = (n: number) => String(n).padStart(2, '0')
+      const d = new Date(u.expires_at); const pad = (n: number) => String(n).padStart(2, '0')
       setExpiryDate(`${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`)
-    } else {
-      setExpiryDate('')
-    }
+    } else { setExpiryDate('') }
   }
 
   const handleSetExpiry = async () => {
@@ -320,14 +278,13 @@ export default function AdminPage() {
 
   const handleCreateNode = async () => {
     setNodeErr('')
-    if (!newNode.name || !newNode.description || !newNode.port) { setNodeErr('Nom, description et port requis'); return }
-    if (!newNode.ip_address.trim()) { setNodeErr("L'adresse IP est obligatoire"); setIpTouched(true); return }
-    if (!newNode.server_type.trim()) { setNodeErr('Le type de serveur est obligatoire'); setStTouched(true); return }
+    if (!newNode.name || !newNode.description || !newNode.port) { setNodeErr(t('admin', 'nodeFieldsRequired')); return }
+    if (!newNode.ip_address.trim()) { setNodeErr(t('admin', 'ipRequired')); setIpTouched(true); return }
+    if (!newNode.server_type.trim()) { setNodeErr(t('admin', 'serverTypeRequired')); setStTouched(true); return }
     setSavingNode(true)
     try {
       await adminApi.createNode({ ...newNode, port: parseInt(newNode.port) })
-      showToast(`Noeud "${newNode.name}" ajouté`)
-      setShowCreateNode(false)
+      showToast(`Noeud "${newNode.name}" ajouté`); setShowCreateNode(false)
       setNewNode({ name: '', role: 'CCN', description: '', ip_address: '', server_type: '', port: '' })
       setIpTouched(false); setStTouched(false); fetchNodes()
     } catch (e) { setNodeErr(e instanceof Error ? e.message : 'Erreur') }
@@ -335,25 +292,18 @@ export default function AdminPage() {
   }
 
   const openEditNode = (n: NodeAdmin) => {
-    setEditNode(n)
-    setEditNodeForm({ role: n.role, description: n.description, ip_address: n.ip_address || '', server_type: n.server_type || '', port: String(n.port) })
-    setEditNodeErr('')
+    setEditNode(n); setEditNodeForm({ role: n.role, description: n.description, ip_address: n.ip_address || '', server_type: n.server_type || '', port: String(n.port) }); setEditNodeErr('')
   }
 
   const handleEditNode = async () => {
     if (!editNode) return; setEditNodeErr('')
-    if (!editNodeForm.ip_address.trim()) { setEditNodeErr("L'adresse IP est obligatoire"); return }
-    if (!editNodeForm.server_type.trim()) { setEditNodeErr('Le type de serveur est obligatoire'); return }
-    if (!editNodeForm.port) { setEditNodeErr('Le port est obligatoire'); return }
+    if (!editNodeForm.ip_address.trim()) { setEditNodeErr(t('admin', 'ipRequired')); return }
+    if (!editNodeForm.server_type.trim()) { setEditNodeErr(t('admin', 'serverTypeRequired')); return }
+    if (!editNodeForm.port) { setEditNodeErr(t('admin', 'portRequired')); return }
     setSavingEditNode(true)
     try {
-      await adminApi.updateNode(editNode.name, {
-        role: editNodeForm.role, description: editNodeForm.description,
-        ip_address: editNodeForm.ip_address.trim(), server_type: editNodeForm.server_type.trim(),
-        port: parseInt(editNodeForm.port)
-      })
-      showToast(`Noeud "${editNode.name}" modifié`)
-      setEditNode(null); fetchNodes()
+      await adminApi.updateNode(editNode.name, { role: editNodeForm.role, description: editNodeForm.description, ip_address: editNodeForm.ip_address.trim(), server_type: editNodeForm.server_type.trim(), port: parseInt(editNodeForm.port) })
+      showToast(`Noeud "${editNode.name}" modifié`); setEditNode(null); fetchNodes()
     } catch (e) { setEditNodeErr(e instanceof Error ? e.message : 'Erreur') }
     finally { setSavingEditNode(false) }
   }
@@ -365,6 +315,12 @@ export default function AdminPage() {
   }
 
   const minDate = new Date(Date.now() + 60000).toISOString().slice(0, 16)
+
+  // ✅ Onglets définis comme tableau normal — pas de conflit avec t
+  const tabs = [
+    { key: 'users' as const, label: t('admin', 'users'), Icon: Users,  count: users.length },
+    { key: 'nodes' as const, label: t('admin', 'nodes'), Icon: Server, count: nodes.length },
+  ]
 
   return (
     <DashboardLayout>
@@ -380,34 +336,28 @@ export default function AdminPage() {
             <div style={{ width: '36px', height: '36px', borderRadius: '10px', background: 'rgba(239,68,68,0.15)', border: '1px solid rgba(239,68,68,0.3)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
               <ShieldCheck size={18} style={{ color: '#ef4444' }} />
             </div>
-            <h1 style={{ fontSize: '1.5rem', fontWeight: 700, color: titleCol, margin: 0 }}>Administration</h1>
+            <h1 style={{ fontSize: '1.5rem', fontWeight: 700, color: titleCol, margin: 0 }}>{t('admin', 'title')}</h1>
           </div>
-          {/* ✅ Bouton changer son propre mot de passe — accessible à tous */}
-          <button
-            onClick={() => { setShowChangePwd(true); setChangePwdErr(''); setChangePwdForm({ old_password: '', new_password: '', confirm: '' }) }}
-            style={{ ...btnStyle('rgba(168,85,247,0.15)', true), color: '#a855f7', border: '1px solid rgba(168,85,247,0.4)' }}
-          >
+          <button onClick={() => { setShowChangePwd(true); setChangePwdErr(''); setChangePwdForm({ old_password: '', new_password: '', confirm: '' }) }}
+            style={{ ...btnStyle('rgba(168,85,247,0.15)', true), color: '#a855f7', border: '1px solid rgba(168,85,247,0.4)' }}>
             <Lock size={13} style={{ color: '#a855f7' }} />
-            <span style={{ color: '#a855f7' }}>Changer mon mot de passe</span>
+            <span style={{ color: '#a855f7' }}>{t('admin', 'changeMyPassword')}</span>
           </button>
         </div>
-        <p style={{ color: subCol, fontSize: '13px', margin: 0 }}>Gestion des utilisateurs et de l&apos;infrastructure</p>
+        <p style={{ color: subCol, fontSize: '13px', margin: 0 }}>{t('admin', 'subtitle')}</p>
       </div>
 
-      {/* Onglets */}
+      {/* ✅ Onglets — variable tab2 pour éviter conflit avec t */}
       <div style={{ display: 'flex', gap: '8px', marginBottom: '24px' }}>
-        {([
-          { key: 'users', label: 'Utilisateurs', Icon: Users,  count: users.length },
-          { key: 'nodes', label: 'Noeuds',       Icon: Server, count: nodes.length },
-        ] as const).map(t => (
-          <button key={t.key} onClick={() => setTab(t.key)} style={{
+        {tabs.map(tab2 => (
+          <button key={tab2.key} onClick={() => setTab(tab2.key)} style={{
             display: 'flex', alignItems: 'center', gap: '8px', padding: '10px 20px', borderRadius: '10px', cursor: 'pointer',
-            border: tab === t.key ? '1px solid rgba(0,130,240,0.5)' : `1px solid ${isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,130,240,0.15)'}`,
-            background: tab === t.key ? 'rgba(0,130,240,0.15)' : isDark ? 'rgba(255,255,255,0.04)' : 'rgba(255,255,255,0.7)',
-            color: tab === t.key ? '#0082f0' : subCol, fontWeight: tab === t.key ? 700 : 400, fontSize: '13px', transition: 'all 0.2s',
+            border: tab === tab2.key ? '1px solid rgba(0,130,240,0.5)' : `1px solid ${isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,130,240,0.15)'}`,
+            background: tab === tab2.key ? 'rgba(0,130,240,0.15)' : isDark ? 'rgba(255,255,255,0.04)' : 'rgba(255,255,255,0.7)',
+            color: tab === tab2.key ? '#0082f0' : subCol, fontWeight: tab === tab2.key ? 700 : 400, fontSize: '13px', transition: 'all 0.2s',
           }}>
-            <t.Icon size={15} />{t.label}
-            <span style={{ background: tab === t.key ? '#0082f0' : isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,130,240,0.1)', color: tab === t.key ? 'white' : subCol, borderRadius: '999px', padding: '1px 8px', fontSize: '11px', fontWeight: 700 }}>{t.count}</span>
+            <tab2.Icon size={15} />{tab2.label}
+            <span style={{ background: tab === tab2.key ? '#0082f0' : isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,130,240,0.1)', color: tab === tab2.key ? 'white' : subCol, borderRadius: '999px', padding: '1px 8px', fontSize: '11px', fontWeight: 700 }}>{tab2.count}</span>
           </button>
         ))}
       </div>
@@ -416,29 +366,29 @@ export default function AdminPage() {
       {tab === 'users' && (
         <div style={card}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
-            <h2 style={{ fontSize: '15px', fontWeight: 700, color: titleCol, margin: 0 }}>Utilisateurs ({users.length})</h2>
+            <h2 style={{ fontSize: '15px', fontWeight: 700, color: titleCol, margin: 0 }}>{t('admin', 'users')} ({users.length})</h2>
             <div style={{ display: 'flex', gap: '8px' }}>
               <button onClick={fetchUsers} style={btnStyle(isDark ? 'rgba(0,130,240,0.2)' : 'rgba(0,130,240,0.08)', true)}>
-                <RefreshCw size={13} style={{ color: '#0082f0' }} /><span style={{ color: '#0082f0' }}>Actualiser</span>
+                <RefreshCw size={13} style={{ color: '#0082f0' }} /><span style={{ color: '#0082f0' }}>{t('admin', 'refresh')}</span>
               </button>
               <button onClick={() => { setShowCreate(true); setCreateErr('') }} style={btnStyle('#0082f0')}>
-                <Plus size={14} /> Nouvel utilisateur
+                <Plus size={14} /> {t('admin', 'newUser')}
               </button>
             </div>
           </div>
-          {loadingU ? <div style={{ textAlign: 'center', padding: '40px', color: subCol }}>Chargement...</div> : (
+          {loadingU ? <div style={{ textAlign: 'center', padding: '40px', color: subCol }}>{t('admin', 'loading')}</div> : (
             <div style={{ overflowX: 'auto' }}>
               <table style={{ width: '100%', borderCollapse: 'collapse' }}>
                 <thead>
                   <tr style={{ borderBottom: `1px solid ${rowBorder}` }}>
-                    {['Utilisateur', 'Nom complet', 'Email', 'Rôle', 'Expiration', 'Dernière connexion', 'Actions'].map(h => (
+                    {[t('admin','username'), t('admin','fullName'), t('admin','email'), t('admin','role'), t('admin','expiration'), t('admin','lastLogin'), t('admin','actions')].map(h => (
                       <th key={h} style={{ padding: '10px 12px', textAlign: 'left', fontSize: '11px', fontWeight: 700, color: headCol, textTransform: 'uppercase', letterSpacing: '0.06em' }}>{h}</th>
                     ))}
                   </tr>
                 </thead>
                 <tbody>
                   {users.map(u => {
-                    const expiry = getExpiryStatus(u.expires_at || null)
+                    const expiry = getExpiryStatus(u.expires_at || null, t)
                     return (
                       <tr key={u.id} style={{ borderBottom: `1px solid ${rowBorder}` }}
                         onMouseEnter={e => (e.currentTarget as HTMLElement).style.background = rowHover}
@@ -451,28 +401,25 @@ export default function AdminPage() {
                         </td>
                         <td style={{ padding: '12px', fontSize: '13px', color: text2Col }}>{u.full_name || '—'}</td>
                         <td style={{ padding: '12px', fontSize: '12px', color: text2Col, fontFamily: 'monospace' }}>{u.email || '—'}</td>
-                        <td style={{ padding: '12px' }}><RoleBadge role={u.role} /></td>
+                        <td style={{ padding: '12px' }}><RoleBadge role={u.role} translate={t} /></td>
                         <td style={{ padding: '12px' }}>
                           {u.role === 'admin' ? (
                             <span style={{ fontSize: '11px', color: subCol }}>—</span>
                           ) : (
-                            <span style={{ fontSize: '11px', fontWeight: 600, color: expiry.color, background: expiry.bg, padding: '3px 8px', borderRadius: '6px' }}>
-                              {expiry.label}
-                            </span>
+                            <span style={{ fontSize: '11px', fontWeight: 600, color: expiry.color, background: expiry.bg, padding: '3px 8px', borderRadius: '6px' }}>{expiry.label}</span>
                           )}
                         </td>
-                        <td style={{ padding: '12px', fontSize: '12px', color: subCol }}>{u.last_login ? new Date(u.last_login).toLocaleString('fr-FR') : 'Jamais'}</td>
+                        <td style={{ padding: '12px', fontSize: '12px', color: subCol }}>{u.last_login ? new Date(u.last_login).toLocaleString('fr-FR') : t('admin', 'never')}</td>
                         <td style={{ padding: '12px' }}>
                           <div style={{ display: 'flex', gap: '6px' }}>
-                            <button onClick={() => openEditUser(u)} title="Modifier" style={{ background: 'rgba(0,130,240,0.12)', border: '1px solid rgba(0,130,240,0.35)', borderRadius: '8px', padding: '6px 10px', cursor: 'pointer', display: 'flex', alignItems: 'center' }}><Pencil size={13} style={{ color: '#0082f0' }} /></button>
+                            <button onClick={() => openEditUser(u)} title={t('admin','modify')} style={{ background: 'rgba(0,130,240,0.12)', border: '1px solid rgba(0,130,240,0.35)', borderRadius: '8px', padding: '6px 10px', cursor: 'pointer', display: 'flex', alignItems: 'center' }}><Pencil size={13} style={{ color: '#0082f0' }} /></button>
                             {u.role === 'operator' && (
-                              <button onClick={() => openExpiry(u)} title="Définir expiration"
-                                style={{ background: 'rgba(168,85,247,0.12)', border: '1px solid rgba(168,85,247,0.35)', borderRadius: '8px', padding: '6px 10px', cursor: 'pointer', display: 'flex', alignItems: 'center' }}>
+                              <button onClick={() => openExpiry(u)} title={t('admin','expiration')} style={{ background: 'rgba(168,85,247,0.12)', border: '1px solid rgba(168,85,247,0.35)', borderRadius: '8px', padding: '6px 10px', cursor: 'pointer', display: 'flex', alignItems: 'center' }}>
                                 <Clock size={13} style={{ color: '#a855f7' }} />
                               </button>
                             )}
-                            <button onClick={() => { setResetTarget(u); setNewPwd('') }} title="Réinitialiser mot de passe" style={{ background: 'rgba(245,158,11,0.12)', border: '1px solid rgba(245,158,11,0.35)', borderRadius: '8px', padding: '6px 10px', cursor: 'pointer', display: 'flex', alignItems: 'center' }}><KeyRound size={13} style={{ color: '#f59e0b' }} /></button>
-                            {u.username !== 'admin' && <button onClick={() => handleDelete(u)} title="Supprimer" style={{ background: 'rgba(239,68,68,0.12)', border: '1px solid rgba(239,68,68,0.35)', borderRadius: '8px', padding: '6px 10px', cursor: 'pointer', display: 'flex', alignItems: 'center' }}><Trash2 size={13} style={{ color: '#ef4444' }} /></button>}
+                            <button onClick={() => { setResetTarget(u); setNewPwd('') }} title={t('admin','resetPassword')} style={{ background: 'rgba(245,158,11,0.12)', border: '1px solid rgba(245,158,11,0.35)', borderRadius: '8px', padding: '6px 10px', cursor: 'pointer', display: 'flex', alignItems: 'center' }}><KeyRound size={13} style={{ color: '#f59e0b' }} /></button>
+                            {u.username !== 'admin' && <button onClick={() => handleDelete(u)} title={t('admin','delete')} style={{ background: 'rgba(239,68,68,0.12)', border: '1px solid rgba(239,68,68,0.35)', borderRadius: '8px', padding: '6px 10px', cursor: 'pointer', display: 'flex', alignItems: 'center' }}><Trash2 size={13} style={{ color: '#ef4444' }} /></button>}
                           </div>
                         </td>
                       </tr>
@@ -489,23 +436,23 @@ export default function AdminPage() {
       {tab === 'nodes' && (
         <div style={card}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
-            <h2 style={{ fontSize: '15px', fontWeight: 700, color: titleCol, margin: 0 }}>Noeuds ({nodes.length})</h2>
+            <h2 style={{ fontSize: '15px', fontWeight: 700, color: titleCol, margin: 0 }}>{t('admin', 'nodes')} ({nodes.length})</h2>
             <div style={{ display: 'flex', gap: '8px' }}>
               <button onClick={fetchNodes} style={btnStyle(isDark ? 'rgba(0,130,240,0.2)' : 'rgba(0,130,240,0.08)', true)}>
-                <RefreshCw size={13} style={{ color: '#0082f0' }} /><span style={{ color: '#0082f0' }}>Actualiser</span>
+                <RefreshCw size={13} style={{ color: '#0082f0' }} /><span style={{ color: '#0082f0' }}>{t('admin', 'refresh')}</span>
               </button>
-              <button onClick={() => setShowCreateNode(true)} style={btnStyle('#0082f0')}><Plus size={14} /> Nouveau noeud</button>
+              <button onClick={() => setShowCreateNode(true)} style={btnStyle('#0082f0')}><Plus size={14} /> {t('admin', 'newNode')}</button>
             </div>
           </div>
-          {loadingN ? <div style={{ color: subCol, padding: '20px' }}>Chargement...</div> : (
+          {loadingN ? <div style={{ color: subCol, padding: '20px' }}>{t('admin', 'loading')}</div> : (
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: '16px' }}>
               {nodes.map(n => (
                 <div key={n.id} style={{ border: `1px solid ${nodeBorder}`, borderRadius: '12px', padding: '18px', background: nodeBg, borderLeft: `4px solid ${roleColor[n.role] || '#6b7280'}` }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '10px' }}>
                     <div><div style={{ fontSize: '14px', fontWeight: 700, color: titleCol, marginBottom: '4px' }}>{n.name}</div><Badge role={n.role} /></div>
                     <div style={{ display: 'flex', gap: '6px' }}>
-                      <button onClick={() => openEditNode(n)} title="Modifier" style={{ background: 'rgba(0,130,240,0.1)', border: '1px solid rgba(0,130,240,0.3)', borderRadius: '8px', padding: '6px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><Pencil size={13} style={{ color: '#0082f0' }} /></button>
-                      <button onClick={() => handleDeleteNode(n.name)} title="Supprimer" style={{ background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.25)', borderRadius: '8px', padding: '6px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><Trash2 size={13} style={{ color: '#ef4444' }} /></button>
+                      <button onClick={() => openEditNode(n)} style={{ background: 'rgba(0,130,240,0.1)', border: '1px solid rgba(0,130,240,0.3)', borderRadius: '8px', padding: '6px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><Pencil size={13} style={{ color: '#0082f0' }} /></button>
+                      <button onClick={() => handleDeleteNode(n.name)} style={{ background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.25)', borderRadius: '8px', padding: '6px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><Trash2 size={13} style={{ color: '#ef4444' }} /></button>
                     </div>
                   </div>
                   <div style={{ fontSize: '12px', color: subCol, marginBottom: '10px' }}>{n.description}</div>
@@ -521,55 +468,29 @@ export default function AdminPage() {
         </div>
       )}
 
-      {/* ══ MODAL Créer user — simplifié ══ */}
+      {/* ══ MODAL Créer user ══ */}
       {showCreate && (
-        <Modal title="Créer un utilisateur" onClose={() => { setShowCreate(false); setCreateErr(''); setRoleTouched(false) }} isDark={isDark}>
-
-          {/* Info */}
+        <Modal title={t('admin', 'createUser')} onClose={() => { setShowCreate(false); setCreateErr(''); setRoleTouched(false) }} isDark={isDark}>
           <div style={{ background: isDark ? 'rgba(0,130,240,0.1)' : '#f0f7ff', border: '1px solid rgba(0,130,240,0.25)', borderRadius: '10px', padding: '12px 16px', fontSize: '12px', color: subCol, lineHeight: 1.6 }}>
-            <strong style={{ color: '#0082f0' }}>✨ Création automatique</strong> — Le login et le mot de passe seront générés automatiquement et envoyés par email à l&apos;utilisateur.
+            <strong style={{ color: '#0082f0' }}>{t('admin', 'autoCreation')}</strong> — {t('admin', 'autoCreationDesc')}
           </div>
-
-          <Field label="Nom complet *">
-            <input
-              style={inputS}
-              placeholder="Ex : Ghassen Chelly"
-              value={newUser.full_name}
-              onChange={e => setNewUser(p => ({ ...p, full_name: e.target.value }))}
-            />
+          <Field label={t('admin', 'fullNameLabel')}>
+            <input style={inputS} placeholder="Ex : Ghassen Chelly" value={newUser.full_name} onChange={e => setNewUser(p => ({ ...p, full_name: e.target.value }))} />
           </Field>
-
-          <Field label="Adresse email *" hint="Tout email valide est accepté">
-            <input
-              style={inputS}
-              type="email"
-              placeholder="Ex : ghassen@gmail.com"
-              value={newUser.email}
-              onChange={e => setNewUser(p => ({ ...p, email: e.target.value }))}
-            />
+          <Field label={t('admin', 'emailLabel')} hint={t('admin', 'emailHint')}>
+            <input style={inputS} type="email" placeholder="Ex : ghassen@gmail.com" value={newUser.email} onChange={e => setNewUser(p => ({ ...p, email: e.target.value }))} />
           </Field>
-
-          <Field label="Rôle *" error={createRoleErr}>
-            <StyledSelect
-              value={newUser.role}
-              onChange={v => { setNewUser(p => ({ ...p, role: v })); setRoleTouched(true) }}
-              style={createRoleErr ? { ...selectS, border: '1px solid rgba(239,68,68,0.6)' } : selectS}
-            >
-              <Opt value="operator" label="Opérateur" />
-              <Opt value="admin"    label="Administrateur" />
+          <Field label={t('admin', 'roleLabel')} error={createRoleErr}>
+            <StyledSelect value={newUser.role} onChange={v => { setNewUser(p => ({ ...p, role: v })); setRoleTouched(true) }} style={createRoleErr ? { ...selectS, border: '1px solid rgba(239,68,68,0.6)' } : selectS}>
+              <Opt value="operator" label={t('admin', 'operator')} />
+              <Opt value="admin"    label={t('admin', 'admin')} />
             </StyledSelect>
           </Field>
-
-          {createErr && (
-            <p style={{ color: '#ef4444', fontSize: '12px', background: 'rgba(239,68,68,0.1)', padding: '8px 12px', borderRadius: '8px', margin: 0 }}>
-              {createErr}
-            </p>
-          )}
-
+          {createErr && <p style={{ color: '#ef4444', fontSize: '12px', background: 'rgba(239,68,68,0.1)', padding: '8px 12px', borderRadius: '8px', margin: 0 }}>{createErr}</p>}
           <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>
-            <button type="button" onClick={() => { setShowCreate(false); setCreateErr('') }} style={btnStyle('#7a9bc5', true)}>Annuler</button>
+            <button type="button" onClick={() => { setShowCreate(false); setCreateErr('') }} style={btnStyle('#7a9bc5', true)}>{t('admin', 'cancel')}</button>
             <button type="button" onClick={handleCreate} disabled={savingCreate} style={btnStyle('#0082f0')}>
-              {savingCreate ? 'Création...' : '✉️ Créer et envoyer email'}
+              {savingCreate ? t('admin', 'creating') : t('admin', 'createAndSend')}
             </button>
           </div>
         </Modal>
@@ -577,147 +498,107 @@ export default function AdminPage() {
 
       {/* ══ MODAL Modifier user ══ */}
       {editUser && (
-        <Modal title={`Modifier "${editUser.username}"`} onClose={() => { setEditUser(null); setEditUserErr('') }} isDark={isDark}>
-          <Field label="Nom complet">
-            <input style={inputS} placeholder="Ex: Ahmed Ben Ali" value={editUserForm.full_name} onChange={e => setEditUserForm(p => ({ ...p, full_name: e.target.value }))} />
+        <Modal title={`${t('admin','editUser')} "${editUser.username}"`} onClose={() => { setEditUser(null); setEditUserErr('') }} isDark={isDark}>
+          <Field label={t('admin', 'fullName')}>
+            <input style={inputS} value={editUserForm.full_name} onChange={e => setEditUserForm(p => ({ ...p, full_name: e.target.value }))} />
           </Field>
-          <Field label="Email">
-            <input style={inputS} type="email" placeholder="exemple@email.com" value={editUserForm.email} onChange={e => setEditUserForm(p => ({ ...p, email: e.target.value }))} />
+          <Field label={t('admin', 'email')}>
+            <input style={inputS} type="email" value={editUserForm.email} onChange={e => setEditUserForm(p => ({ ...p, email: e.target.value }))} />
           </Field>
-          <Field label="Rôle *">
+          <Field label={t('admin', 'roleLabel')}>
             <StyledSelect value={editUserForm.role} onChange={v => setEditUserForm(p => ({ ...p, role: v }))} style={selectS}>
-              <Opt value="operator" label="Opérateur" />
-              <Opt value="admin"    label="Administrateur" />
+              <Opt value="operator" label={t('admin', 'operator')} />
+              <Opt value="admin"    label={t('admin', 'admin')} />
             </StyledSelect>
           </Field>
           {editUserErr && <p style={{ color: '#ef4444', fontSize: '12px', background: 'rgba(239,68,68,0.1)', padding: '8px 12px', borderRadius: '8px', margin: 0 }}>{editUserErr}</p>}
           <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>
-            <button type="button" onClick={() => { setEditUser(null); setEditUserErr('') }} style={btnStyle('#7a9bc5', true)}>Annuler</button>
-            <button type="button" onClick={handleEditUser} disabled={savingEditUser} style={btnStyle('#0082f0')}>{savingEditUser ? 'Enregistrement...' : 'Enregistrer'}</button>
+            <button type="button" onClick={() => { setEditUser(null); setEditUserErr('') }} style={btnStyle('#7a9bc5', true)}>{t('admin', 'cancel')}</button>
+            <button type="button" onClick={handleEditUser} disabled={savingEditUser} style={btnStyle('#0082f0')}>{savingEditUser ? t('admin', 'saving') : t('admin', 'save')}</button>
           </div>
         </Modal>
       )}
 
       {/* ══ MODAL Expiration ══ */}
       {expiryTarget && (
-        <Modal title={`Expiration — ${expiryTarget.username}`} onClose={() => { setExpiryTarget(null); setExpiryErr('') }} isDark={isDark}>
+        <Modal title={`${t('admin','expirationModal')} — ${expiryTarget.username}`} onClose={() => { setExpiryTarget(null); setExpiryErr('') }} isDark={isDark}>
           <div style={{ padding: '12px', borderRadius: '10px', background: isDark ? 'rgba(168,85,247,0.1)' : 'rgba(168,85,247,0.06)', border: '1px solid rgba(168,85,247,0.2)', fontSize: '12px', color: subCol, lineHeight: 1.6 }}>
-            <strong style={{ color: '#a855f7' }}>Délai d&apos;expiration</strong> — À l&apos;expiration, l&apos;opérateur ne pourra plus se connecter. Laissez vide pour un accès illimité.
+            <strong style={{ color: '#a855f7' }}>{t('admin','expiration')}</strong> — {t('admin','expirationDesc')}
           </div>
           {expiryTarget.expires_at && (() => {
-            const s = getExpiryStatus(expiryTarget.expires_at!)
+            const s = getExpiryStatus(expiryTarget.expires_at!, t)
             return (
               <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '12px' }}>
-                <span style={{ color: subCol }}>Statut actuel :</span>
+                <span style={{ color: subCol }}>{t('admin','currentStatus')}</span>
                 <span style={{ fontWeight: 700, color: s.color, background: s.bg, padding: '2px 8px', borderRadius: '6px' }}>{s.label}</span>
                 <span style={{ color: subCol }}>— {new Date(expiryTarget.expires_at!).toLocaleString('fr-FR')}</span>
               </div>
             )
           })()}
-          <Field label="Nouvelle date d'expiration" hint="Laissez vide pour supprimer la limite">
+          <Field label={t('admin', 'newExpiry')} hint={t('admin', 'expiryHint')}>
             <input style={inputS} type="datetime-local" min={minDate} value={expiryDate} onChange={e => setExpiryDate(e.target.value)} />
           </Field>
           {expiryErr && <p style={{ color: '#ef4444', fontSize: '12px', background: 'rgba(239,68,68,0.1)', padding: '8px 12px', borderRadius: '8px', margin: 0 }}>{expiryErr}</p>}
           <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>
-            <button type="button" onClick={() => { setExpiryTarget(null); setExpiryErr('') }} style={btnStyle('#7a9bc5', true)}>Annuler</button>
-            {expiryDate && (
-              <button type="button" onClick={() => { setExpiryDate('') }} title="Supprimer la limite" style={{ ...btnStyle('#6b7280', true), gap: '4px' }}>
-                <X size={12} /> Supprimer limite
-              </button>
-            )}
+            <button type="button" onClick={() => { setExpiryTarget(null); setExpiryErr('') }} style={btnStyle('#7a9bc5', true)}>{t('admin', 'cancel')}</button>
+            {expiryDate && <button type="button" onClick={() => setExpiryDate('')} style={{ ...btnStyle('#6b7280', true), gap: '4px' }}><X size={12} /> {t('admin', 'removeLimit')}</button>}
             <button type="button" onClick={handleSetExpiry} disabled={savingExpiry} style={btnStyle('#a855f7')}>
-              <Clock size={13} />{savingExpiry ? 'Enregistrement...' : 'Enregistrer'}
+              <Clock size={13} />{savingExpiry ? t('admin', 'saving') : t('admin', 'save')}
             </button>
           </div>
         </Modal>
       )}
 
-      {/* ══ MODAL Reset password (admin) ══ */}
+      {/* ══ MODAL Reset password ══ */}
       {resetTarget && (
-        <Modal title="Réinitialiser le mot de passe" onClose={() => { setResetTarget(null); setNewPwd('') }} isDark={isDark}>
+        <Modal title={t('admin', 'resetPassword')} onClose={() => { setResetTarget(null); setNewPwd('') }} isDark={isDark}>
           <p style={{ color: subCol, fontSize: '13px', margin: 0 }}>Utilisateur : <strong style={{ color: titleCol }}>{resetTarget.username}</strong></p>
-          <Field label="Nouveau mot de passe">
+          <Field label={t('admin', 'newPassword')}>
             <div style={{ position: 'relative' }}>
               <input style={{ ...inputS, paddingRight: '40px' }} type={showNewPwd ? 'text' : 'password'} placeholder="••••••••" value={newPwd} onChange={e => setNewPwd(e.target.value)} />
               <button type="button" onClick={() => setShowNewPwd(p => !p)} style={{ position: 'absolute', right: '10px', top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', color: '#7a9bc5', display: 'flex' }}>{showNewPwd ? <EyeOff size={15} /> : <Eye size={15} />}</button>
             </div>
           </Field>
           <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>
-            <button type="button" onClick={() => { setResetTarget(null); setNewPwd('') }} style={btnStyle('#7a9bc5', true)}>Annuler</button>
-            <button type="button" onClick={handleResetPwd} disabled={savingPwd || !newPwd} style={btnStyle('#f59e0b')}>{savingPwd ? 'Enregistrement...' : 'Réinitialiser'}</button>
+            <button type="button" onClick={() => { setResetTarget(null); setNewPwd('') }} style={btnStyle('#7a9bc5', true)}>{t('admin', 'cancel')}</button>
+            <button type="button" onClick={handleResetPwd} disabled={savingPwd || !newPwd} style={btnStyle('#f59e0b')}>{savingPwd ? t('admin', 'saving') : t('admin', 'reset')}</button>
           </div>
         </Modal>
       )}
 
-      {/* ══ MODAL Changer son propre mot de passe ══ */}
+      {/* ══ MODAL Changer mot de passe ══ */}
       {showChangePwd && (
-        <Modal title="Changer mon mot de passe" onClose={() => { setShowChangePwd(false); setChangePwdErr('') }} isDark={isDark}>
+        <Modal title={t('admin', 'changePassword')} onClose={() => { setShowChangePwd(false); setChangePwdErr('') }} isDark={isDark}>
           <div style={{ padding: '12px', borderRadius: '10px', background: isDark ? 'rgba(168,85,247,0.1)' : 'rgba(168,85,247,0.06)', border: '1px solid rgba(168,85,247,0.2)', fontSize: '12px', color: subCol, lineHeight: 1.6 }}>
-            <strong style={{ color: '#a855f7' }}>🔐 Sécurité</strong> — Votre nouveau mot de passe doit contenir au moins 6 caractères.
+            <strong style={{ color: '#a855f7' }}>🔐 {t('admin', 'changePassword')}</strong> — {t('admin', 'min6')}
           </div>
-
-          <Field label="Ancien mot de passe *">
+          <Field label={t('admin', 'oldPassword')}>
             <div style={{ position: 'relative' }}>
-              <input
-                style={{ ...inputS, paddingRight: '40px' }}
-                type={showOldPwd ? 'text' : 'password'}
-                placeholder="••••••••"
-                value={changePwdForm.old_password}
-                onChange={e => setChangePwdForm(p => ({ ...p, old_password: e.target.value }))}
-              />
-              <button type="button" onClick={() => setShowOldPwd(p => !p)} style={{ position: 'absolute', right: '10px', top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', color: '#7a9bc5', display: 'flex' }}>
-                {showOldPwd ? <EyeOff size={15} /> : <Eye size={15} />}
-              </button>
+              <input style={{ ...inputS, paddingRight: '40px' }} type={showOldPwd ? 'text' : 'password'} placeholder="••••••••" value={changePwdForm.old_password} onChange={e => setChangePwdForm(p => ({ ...p, old_password: e.target.value }))} />
+              <button type="button" onClick={() => setShowOldPwd(p => !p)} style={{ position: 'absolute', right: '10px', top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', color: '#7a9bc5', display: 'flex' }}>{showOldPwd ? <EyeOff size={15} /> : <Eye size={15} />}</button>
             </div>
           </Field>
-
-          <Field label="Nouveau mot de passe *" hint="Minimum 6 caractères">
+          <Field label={t('admin', 'newPassword')} hint={t('admin', 'min6')}>
             <div style={{ position: 'relative' }}>
-              <input
-                style={{ ...inputS, paddingRight: '40px' }}
-                type={showNewUserPwd ? 'text' : 'password'}
-                placeholder="••••••••"
-                value={changePwdForm.new_password}
-                onChange={e => setChangePwdForm(p => ({ ...p, new_password: e.target.value }))}
-              />
-              <button type="button" onClick={() => setShowNewUserPwd(p => !p)} style={{ position: 'absolute', right: '10px', top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', color: '#7a9bc5', display: 'flex' }}>
-                {showNewUserPwd ? <EyeOff size={15} /> : <Eye size={15} />}
-              </button>
+              <input style={{ ...inputS, paddingRight: '40px' }} type={showNewUserPwd ? 'text' : 'password'} placeholder="••••••••" value={changePwdForm.new_password} onChange={e => setChangePwdForm(p => ({ ...p, new_password: e.target.value }))} />
+              <button type="button" onClick={() => setShowNewUserPwd(p => !p)} style={{ position: 'absolute', right: '10px', top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', color: '#7a9bc5', display: 'flex' }}>{showNewUserPwd ? <EyeOff size={15} /> : <Eye size={15} />}</button>
             </div>
           </Field>
-
-          <Field label="Confirmer le nouveau mot de passe *">
+          <Field label={t('admin', 'confirmPassword')}>
             <div style={{ position: 'relative' }}>
-              <input
-                style={{
-                  ...inputS, paddingRight: '40px',
-                  ...(changePwdForm.confirm && changePwdForm.new_password !== changePwdForm.confirm
-                    ? { border: '1px solid rgba(239,68,68,0.6)' } : {})
-                }}
-                type={showConfirmPwd ? 'text' : 'password'}
-                placeholder="••••••••"
-                value={changePwdForm.confirm}
-                onChange={e => setChangePwdForm(p => ({ ...p, confirm: e.target.value }))}
-              />
-              <button type="button" onClick={() => setShowConfirmPwd(p => !p)} style={{ position: 'absolute', right: '10px', top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', color: '#7a9bc5', display: 'flex' }}>
-                {showConfirmPwd ? <EyeOff size={15} /> : <Eye size={15} />}
-              </button>
+              <input style={{ ...inputS, paddingRight: '40px', ...(changePwdForm.confirm && changePwdForm.new_password !== changePwdForm.confirm ? { border: '1px solid rgba(239,68,68,0.6)' } : {}) }}
+                type={showConfirmPwd ? 'text' : 'password'} placeholder="••••••••" value={changePwdForm.confirm} onChange={e => setChangePwdForm(p => ({ ...p, confirm: e.target.value }))} />
+              <button type="button" onClick={() => setShowConfirmPwd(p => !p)} style={{ position: 'absolute', right: '10px', top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', color: '#7a9bc5', display: 'flex' }}>{showConfirmPwd ? <EyeOff size={15} /> : <Eye size={15} />}</button>
             </div>
             {changePwdForm.confirm && changePwdForm.new_password !== changePwdForm.confirm && (
-              <p style={{ margin: '4px 0 0', fontSize: '11px', color: '#ef4444' }}>⚠ Les mots de passe ne correspondent pas</p>
+              <p style={{ margin: '4px 0 0', fontSize: '11px', color: '#ef4444' }}>⚠ {t('admin', 'passwordsNoMatch')}</p>
             )}
           </Field>
-
-          {changePwdErr && (
-            <p style={{ color: '#ef4444', fontSize: '12px', background: 'rgba(239,68,68,0.1)', padding: '8px 12px', borderRadius: '8px', margin: 0 }}>
-              {changePwdErr}
-            </p>
-          )}
-
+          {changePwdErr && <p style={{ color: '#ef4444', fontSize: '12px', background: 'rgba(239,68,68,0.1)', padding: '8px 12px', borderRadius: '8px', margin: 0 }}>{changePwdErr}</p>}
           <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>
-            <button type="button" onClick={() => { setShowChangePwd(false); setChangePwdErr('') }} style={btnStyle('#7a9bc5', true)}>Annuler</button>
+            <button type="button" onClick={() => { setShowChangePwd(false); setChangePwdErr('') }} style={btnStyle('#7a9bc5', true)}>{t('admin', 'cancel')}</button>
             <button type="button" onClick={handleChangePwd} disabled={savingChangePwd} style={btnStyle('#a855f7')}>
-              <Lock size={13} />{savingChangePwd ? 'Modification...' : 'Changer le mot de passe'}
+              <Lock size={13} />{savingChangePwd ? t('admin', 'changing') : t('admin', 'changePassword')}
             </button>
           </div>
         </Modal>
@@ -725,33 +606,33 @@ export default function AdminPage() {
 
       {/* ══ MODAL Créer noeud ══ */}
       {showCreateNode && (
-        <Modal title="Ajouter un noeud" onClose={() => { setShowCreateNode(false); setNodeErr(''); setIpTouched(false); setStTouched(false) }} isDark={isDark}>
-          <Field label="Nom du noeud *"><input style={inputS} placeholder="ex: ttsdp18a" value={newNode.name} onChange={e => setNewNode(p => ({ ...p, name: e.target.value }))} /></Field>
-          <Field label="Rôle *"><StyledSelect value={newNode.role} onChange={v => setNewNode(p => ({ ...p, role: v }))} style={selectS}>{ROLES.map(r => <Opt key={r} value={r} label={r} />)}</StyledSelect></Field>
-          <Field label="Description *"><input style={inputS} placeholder="ex: Service Data Point secondaire" value={newNode.description} onChange={e => setNewNode(p => ({ ...p, description: e.target.value }))} /></Field>
-          <Field label="Adresse IP *" error={ipErr}><input style={ipErr ? inputErr : inputS} placeholder="ex: 192.168.147.130" value={newNode.ip_address} onChange={e => setNewNode(p => ({ ...p, ip_address: e.target.value }))} onBlur={() => setIpTouched(true)} /></Field>
-          <Field label="Type de serveur *" error={stErr}><input style={stErr ? inputErr : inputS} placeholder="ex: HPE ProLiant DL360p Gen8" value={newNode.server_type} onChange={e => setNewNode(p => ({ ...p, server_type: e.target.value }))} onBlur={() => setStTouched(true)} /></Field>
-          <Field label="Port *"><input style={inputS} type="number" placeholder="ex: 9107" value={newNode.port} onChange={e => setNewNode(p => ({ ...p, port: e.target.value }))} /></Field>
+        <Modal title={t('admin', 'addNode')} onClose={() => { setShowCreateNode(false); setNodeErr(''); setIpTouched(false); setStTouched(false) }} isDark={isDark}>
+          <Field label={t('admin', 'nodeName')}><input style={inputS} placeholder="ex: ttsdp18a" value={newNode.name} onChange={e => setNewNode(p => ({ ...p, name: e.target.value }))} /></Field>
+          <Field label={t('admin', 'role')}><StyledSelect value={newNode.role} onChange={v => setNewNode(p => ({ ...p, role: v }))} style={selectS}>{ROLES.map(r => <Opt key={r} value={r} label={r} />)}</StyledSelect></Field>
+          <Field label={t('admin', 'description')}><input style={inputS} placeholder="ex: Service Data Point secondaire" value={newNode.description} onChange={e => setNewNode(p => ({ ...p, description: e.target.value }))} /></Field>
+          <Field label={t('admin', 'ipAddress')} error={ipErr}><input style={ipErr ? inputErr : inputS} placeholder="ex: 192.168.147.130" value={newNode.ip_address} onChange={e => setNewNode(p => ({ ...p, ip_address: e.target.value }))} onBlur={() => setIpTouched(true)} /></Field>
+          <Field label={t('admin', 'serverType')} error={stErr}><input style={stErr ? inputErr : inputS} placeholder="ex: HPE ProLiant DL360p Gen8" value={newNode.server_type} onChange={e => setNewNode(p => ({ ...p, server_type: e.target.value }))} onBlur={() => setStTouched(true)} /></Field>
+          <Field label={t('admin', 'port')}><input style={inputS} type="number" placeholder="ex: 9107" value={newNode.port} onChange={e => setNewNode(p => ({ ...p, port: e.target.value }))} /></Field>
           {nodeErr && <p style={{ color: '#ef4444', fontSize: '12px', background: 'rgba(239,68,68,0.1)', padding: '8px 12px', borderRadius: '8px', margin: 0 }}>{nodeErr}</p>}
           <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>
-            <button type="button" onClick={() => { setShowCreateNode(false); setNodeErr('') }} style={btnStyle('#7a9bc5', true)}>Annuler</button>
-            <button type="button" onClick={handleCreateNode} disabled={savingNode} style={btnStyle('#0082f0')}>{savingNode ? 'Ajout...' : 'Ajouter'}</button>
+            <button type="button" onClick={() => { setShowCreateNode(false); setNodeErr('') }} style={btnStyle('#7a9bc5', true)}>{t('admin', 'cancel')}</button>
+            <button type="button" onClick={handleCreateNode} disabled={savingNode} style={btnStyle('#0082f0')}>{savingNode ? t('admin', 'adding') : t('admin', 'add')}</button>
           </div>
         </Modal>
       )}
 
       {/* ══ MODAL Modifier noeud ══ */}
       {editNode && (
-        <Modal title={`Modifier "${editNode.name}"`} onClose={() => { setEditNode(null); setEditNodeErr('') }} isDark={isDark}>
-          <Field label="Rôle *"><StyledSelect value={editNodeForm.role} onChange={v => setEditNodeForm(p => ({ ...p, role: v }))} style={selectS}>{ROLES.map(r => <Opt key={r} value={r} label={r} />)}</StyledSelect></Field>
-          <Field label="Description"><input style={inputS} value={editNodeForm.description} onChange={e => setEditNodeForm(p => ({ ...p, description: e.target.value }))} /></Field>
-          <Field label="Adresse IP *"><input style={inputS} placeholder="ex: 192.168.147.128" value={editNodeForm.ip_address} onChange={e => setEditNodeForm(p => ({ ...p, ip_address: e.target.value }))} /></Field>
-          <Field label="Type de serveur *"><input style={inputS} placeholder="ex: HPE ProLiant DL360p Gen8" value={editNodeForm.server_type} onChange={e => setEditNodeForm(p => ({ ...p, server_type: e.target.value }))} /></Field>
-          <Field label="Port *"><input style={inputS} type="number" value={editNodeForm.port} onChange={e => setEditNodeForm(p => ({ ...p, port: e.target.value }))} /></Field>
+        <Modal title={`${t('admin','modify')} "${editNode.name}"`} onClose={() => { setEditNode(null); setEditNodeErr('') }} isDark={isDark}>
+          <Field label={t('admin', 'role')}><StyledSelect value={editNodeForm.role} onChange={v => setEditNodeForm(p => ({ ...p, role: v }))} style={selectS}>{ROLES.map(r => <Opt key={r} value={r} label={r} />)}</StyledSelect></Field>
+          <Field label={t('admin', 'description')}><input style={inputS} value={editNodeForm.description} onChange={e => setEditNodeForm(p => ({ ...p, description: e.target.value }))} /></Field>
+          <Field label={t('admin', 'ipAddress')}><input style={inputS} placeholder="ex: 192.168.147.128" value={editNodeForm.ip_address} onChange={e => setEditNodeForm(p => ({ ...p, ip_address: e.target.value }))} /></Field>
+          <Field label={t('admin', 'serverType')}><input style={inputS} placeholder="ex: HPE ProLiant DL360p Gen8" value={editNodeForm.server_type} onChange={e => setEditNodeForm(p => ({ ...p, server_type: e.target.value }))} /></Field>
+          <Field label={t('admin', 'port')}><input style={inputS} type="number" value={editNodeForm.port} onChange={e => setEditNodeForm(p => ({ ...p, port: e.target.value }))} /></Field>
           {editNodeErr && <p style={{ color: '#ef4444', fontSize: '12px', background: 'rgba(239,68,68,0.1)', padding: '8px 12px', borderRadius: '8px', margin: 0 }}>{editNodeErr}</p>}
           <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>
-            <button type="button" onClick={() => { setEditNode(null); setEditNodeErr('') }} style={btnStyle('#7a9bc5', true)}>Annuler</button>
-            <button type="button" onClick={handleEditNode} disabled={savingEditNode} style={btnStyle('#0082f0')}>{savingEditNode ? 'Enregistrement...' : 'Enregistrer'}</button>
+            <button type="button" onClick={() => { setEditNode(null); setEditNodeErr('') }} style={btnStyle('#7a9bc5', true)}>{t('admin', 'cancel')}</button>
+            <button type="button" onClick={handleEditNode} disabled={savingEditNode} style={btnStyle('#0082f0')}>{savingEditNode ? t('admin', 'saving') : t('admin', 'save')}</button>
           </div>
         </Modal>
       )}

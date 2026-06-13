@@ -2,7 +2,7 @@
 
 import { usePathname, useRouter } from 'next/navigation'
 import Link from 'next/link'
-import { Clock, RefreshCw, Wifi, Sun, Moon, User, KeyRound, LogOut, ChevronDown } from 'lucide-react'
+import { RefreshCw, Sun, Moon, User, LogOut, ChevronDown } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { useTheme } from 'next-themes'
 
@@ -143,15 +143,7 @@ export function Topbar({ onRefresh, isRefreshing, lastUpdate }: TopbarProps) {
           }}>
             {getTitle()}
           </h1>
-          <div style={{
-            display: 'flex', alignItems: 'center', gap: '5px',
-            padding: '4px 10px', borderRadius: '20px',
-            background: 'rgba(0,212,170,0.12)',
-            border: '1px solid rgba(0,212,170,0.25)',
-          }}>
-            <Wifi size={12} style={{ color: '#00d4aa' }} />
-            <span style={{ fontSize: '11px', fontWeight: 600, color: '#00d4aa' }}>En ligne</span>
-          </div>
+          
         </div>
 
         {/* Right */}
@@ -173,21 +165,6 @@ export function Topbar({ onRefresh, isRefreshing, lastUpdate }: TopbarProps) {
             </div>
           )}
 
-          {/* Clock — identique à l'original */}
-          <div suppressHydrationWarning style={{
-            display: 'flex', alignItems: 'center', gap: '6px',
-            padding: '6px 12px', borderRadius: '8px',
-            background: isDark ? 'rgba(0,130,240,0.08)' : 'rgba(0,130,240,0.05)',
-            border: '1px solid rgba(0,130,240,0.12)',
-          }}>
-            <Clock size={14} style={{ color: '#0082f0' }} />
-            <span suppressHydrationWarning style={{
-              fontFamily: 'monospace', fontWeight: 700, fontSize: '13px',
-              color: isDark ? '#e2e8f0' : '#0a1628',
-            }}>
-              {currentTime}
-            </span>
-          </div>
 
           {/* Toggle Dark/Light — identique à l'original */}
           {mounted && (
@@ -218,16 +195,14 @@ export function Topbar({ onRefresh, isRefreshing, lastUpdate }: TopbarProps) {
           {/* Refresh — identique à l'original */}
           {onRefresh && (
             <button onClick={onRefresh} disabled={isRefreshing} style={{
-              display: 'flex', alignItems: 'center', gap: '6px',
-              padding: '7px 16px', borderRadius: '8px', border: 'none',
-              background: 'linear-gradient(135deg,#0055cc,#0082f0)',
-              color: 'white', fontSize: '13px', fontWeight: 600,
-              cursor: isRefreshing ? 'not-allowed' : 'pointer',
-              opacity: isRefreshing ? 0.6 : 1, transition: 'all 0.2s',
-            }}>
-              <RefreshCw size={13} style={{ animation: isRefreshing ? 'spin 1s linear infinite' : 'none' }} />
-              Actualiser
-            </button>
+  display: 'flex', alignItems: 'center', justifyContent: 'center',
+  width: '36px', height: '36px', borderRadius: '8px', border: 'none',
+  background: 'linear-gradient(135deg,#0055cc,#0082f0)',
+  color: 'white', cursor: isRefreshing ? 'not-allowed' : 'pointer',
+  opacity: isRefreshing ? 0.6 : 1, transition: 'all 0.2s',
+}} title="Actualiser">
+  <RefreshCw size={15} style={{ animation: isRefreshing ? 'spin 1s linear infinite' : 'none' }} />
+</button>
           )}
 
           {/* ✅ NOUVEAU : Avatar + dropdown profil */}
@@ -348,30 +323,6 @@ export function Topbar({ onRefresh, isRefreshing, lastUpdate }: TopbarProps) {
                     </div>
                   </Link>
 
-                  {/* Changer mot de passe */}
-                  <Link href="/profil" onClick={() => setDropOpen(false)} style={{ textDecoration: 'none' }}>
-                    <div
-                      style={{
-                        display: 'flex', alignItems: 'center', gap: '10px',
-                        padding: '9px 12px', borderRadius: '8px',
-                        color: dropSub, fontSize: '13px', fontWeight: 500, cursor: 'pointer',
-                        transition: 'all 0.15s',
-                      }}
-                      onMouseEnter={e => {
-                        (e.currentTarget as HTMLElement).style.background = dropHover
-                        ;(e.currentTarget as HTMLElement).style.color = dropText
-                      }}
-                      onMouseLeave={e => {
-                        (e.currentTarget as HTMLElement).style.background = 'transparent'
-                        ;(e.currentTarget as HTMLElement).style.color = dropSub
-                      }}
-                    >
-                      <div style={{ width: '28px', height: '28px', borderRadius: '8px', background: 'rgba(168,85,247,0.12)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                        <KeyRound size={13} color="#a855f7" />
-                      </div>
-                      Changer mon mot de passe
-                    </div>
-                  </Link>
 
                   {/* Séparateur */}
                   <div style={{ height: '1px', background: isDark ? 'rgba(255,255,255,0.07)' : 'rgba(0,130,240,0.1)', margin: '6px 0' }} />

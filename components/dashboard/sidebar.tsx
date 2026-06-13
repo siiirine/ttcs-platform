@@ -11,7 +11,6 @@ import {
   Activity,
   TrendingUp,
   MessageSquare,
-  LogOut,
   ShieldCheck,
 } from 'lucide-react'
 
@@ -167,31 +166,6 @@ export function Sidebar() {
             <div style={{ fontSize: '10px', color: userSubCol, transition: 'color 0.3s' }}>Version 2.0.0</div>
           </div>
         </div>
-
-        {/* Bouton Déconnexion */}
-        <button
-          onClick={() => {
-            // ✅ Efface aussi ttcs_role
-            document.cookie = 'ttcs_token=; path=/; max-age=0'
-            document.cookie = 'ttcs_user=; path=/; max-age=0'
-            document.cookie = 'ttcs_role=; path=/; max-age=0'
-            window.location.href = '/login'
-          }}
-          style={{
-            width: '100%', padding: '10px', borderRadius: '10px',
-            border: '1px solid rgba(239,68,68,0.25)',
-            background: 'rgba(239,68,68,0.08)',
-            color: '#ef4444', fontSize: '13px', fontWeight: 600,
-            cursor: 'pointer',
-            display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px',
-            transition: 'all 0.2s',
-          }}
-          onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = 'rgba(239,68,68,0.15)'; (e.currentTarget as HTMLElement).style.borderColor = 'rgba(239,68,68,0.5)' }}
-          onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = 'rgba(239,68,68,0.08)'; (e.currentTarget as HTMLElement).style.borderColor = 'rgba(239,68,68,0.25)' }}
-        >
-          <LogOut size={14} />
-          Déconnexion
-        </button>
       </div>
     </aside>
   )

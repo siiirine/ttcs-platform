@@ -342,6 +342,26 @@ export const translations = {
     feature4sub:      { fr: 'Groq LLaMA 3.3 70B', en: 'Groq LLaMA 3.3 70B' },
   },
 
+  // ── Détail nœud (app/noeuds/[node]/page.tsx) ─────────────────────────────
+  nodeDetail: {
+    backToNodes:    { fr: 'Retour aux noeuds',               en: 'Back to nodes' },
+    notFound:       { fr: 'Noeud introuvable',                en: 'Node not found' },
+    hardware:       { fr: 'Hardware',                         en: 'Hardware' },
+    os:             { fr: "Système d'exploitation",           en: 'Operating System' },
+    application:    { fr: 'Application',                      en: 'Application' },
+    cip:            { fr: 'CIP (Charging Interface)',         en: 'CIP (Charging Interface)' },
+    timeline:       { fr: 'Timeline des événements',          en: 'Event timeline' },
+    status:         { fr: 'Statut',                           en: 'Status' },
+    temperature:    { fr: 'Température',                      en: 'Temperature' },
+    uptime:         { fr: 'Uptime',                           en: 'Uptime' },
+    criticalAlarms: { fr: 'Alarmes critiques',                en: 'Critical alarms' },
+    majorAlarms:    { fr: 'Alarmes majeures',                 en: 'Major alarms' },
+    detectedIssues: { fr: 'Problèmes détectés:',             en: 'Detected issues:' },
+    noEvents:       { fr: 'Aucun événement dans la timeline', en: 'No events in timeline' },
+    value:          { fr: 'Valeur',                           en: 'Value' },
+    source:         { fr: 'Source',                           en: 'Source' },
+  },
+
   // ── Commun ────────────────────────────────────────────────────────────────
   common: {
     loading:    { fr: 'Chargement...', en: 'Loading...' },

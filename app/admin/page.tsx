@@ -9,8 +9,7 @@ import { adminApi, User, NodeAdmin } from '@/lib/api'
 import {
   Users, Server, Plus, Trash2, KeyRound, RefreshCw,
   ShieldCheck, Eye, EyeOff, Pencil, Clock, X, Lock,
-  AlertCircle, Crown, User as UserIcon, ServerCog,
-  Info,
+  AlertCircle, Crown, User as UserIcon, Info,
 } from 'lucide-react'
 
 const BASE_URL = 'http://192.168.147.129:8000'
@@ -21,9 +20,16 @@ const ROLE_COLOR: Record<string, string> = {
   VS:  '#5F5E5A', OCC: '#854F0B', AF:  '#993556',
 }
 
-type AdminView = 'users' | 'nodes'
+const ROLE_DESC: Record<string, string> = {
+  CCN: 'Charging Control',
+  AIR: 'Account Info & Res.',
+  SDP: 'Service Data Point',
+  VS:  'Voucher Server',
+  OCC: 'Online Charging',
+  AF:  'Account Filter',
+}
 
-/* ─────────────────────────────────────────── helpers ── */
+type AdminView = 'users' | 'nodes'
 
 function useIsDark() {
   const { resolvedTheme } = useTheme()
@@ -47,7 +53,83 @@ function getExpiryStatus(expires_at: string | null, tr: (s: string, k: string) =
   return { label: new Date(expires_at).toLocaleDateString('fr-FR'), color: '#185FA5', bg: 'rgba(24,95,165,0.1)' }
 }
 
-/* ─────────────────────────────────────────── micro UI ── */
+/* ── KPI Utilisateurs ── */
+function UserKpiCard({ label, value, sub, Icon, accent, isDark }: {
+  label: string; value: number; sub: string
+  Icon: React.ElementType; accent: string; isDark: boolean
+}) {
+  return (
+    <div style={{
+      background: isDark ? `${accent}14` : `${accent}09`,
+      border: `0.5px solid ${accent}35`,
+      borderRadius: 12, padding: '16px 18px',
+      display: 'flex', alignItems: 'center', gap: 14,
+      position: 'relative', overflow: 'hidden',
+    }}>
+      <div style={{
+        position: 'absolute', right: -12, top: -12,
+        width: 72, height: 72, borderRadius: '50%',
+        background: `${accent}10`, pointerEvents: 'none',
+      }} />
+      <div style={{
+        width: 44, height: 44, borderRadius: 12, flexShrink: 0,
+        background: `${accent}20`, border: `0.5px solid ${accent}40`,
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+      }}>
+        <Icon size={20} style={{ color: accent }} aria-hidden />
+      </div>
+      <div>
+        <div style={{ fontSize: 11, color: isDark ? `${accent}bb` : `${accent}99`, fontWeight: 500, marginBottom: 2 }}>
+          {label}
+        </div>
+        <div style={{ fontSize: 28, fontWeight: 700, color: isDark ? '#e8f4ff' : '#0a1628', lineHeight: 1, letterSpacing: '-.5px' }}>
+          {value}
+        </div>
+        <div style={{ fontSize: 10, color: isDark ? 'rgba(255,255,255,0.3)' : 'rgba(0,0,0,0.35)', marginTop: 3 }}>
+          {sub}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+/* ── KPI Nœuds par type ── */
+function NodeKpiCard({ role, count, isDark }: { role: string; count: number; isDark: boolean }) {
+  const c = ROLE_COLOR[role] || '#5F5E5A'
+  return (
+    <div style={{
+      background: isDark ? `${c}14` : `${c}09`,
+      border: `0.5px solid ${c}35`,
+      borderRadius: 12, padding: '14px 16px',
+      position: 'relative', overflow: 'hidden',
+    }}>
+      <div style={{
+        position: 'absolute', right: -8, bottom: -8,
+        width: 52, height: 52, borderRadius: '50%',
+        background: `${c}12`, pointerEvents: 'none',
+      }} />
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
+        <span style={{
+          fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 6,
+          background: `${c}22`, color: c, border: `0.5px solid ${c}55`, letterSpacing: '.04em',
+        }}>{role}</span>
+        <div style={{
+          width: 28, height: 28, borderRadius: 7,
+          background: `${c}18`, border: `0.5px solid ${c}30`,
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+        }}>
+          <Server size={13} style={{ color: c }} aria-hidden />
+        </div>
+      </div>
+      <div style={{ fontSize: 30, fontWeight: 700, color: isDark ? '#e8f4ff' : '#0a1628', lineHeight: 1, letterSpacing: '-.5px' }}>
+        {count}
+      </div>
+      <div style={{ fontSize: 10, color: isDark ? 'rgba(255,255,255,0.35)' : 'rgba(0,0,0,0.38)', marginTop: 5 }}>
+        {ROLE_DESC[role] || role}
+      </div>
+    </div>
+  )
+}
 
 function RoleBadge({ role, tr }: { role: string; tr: (s: string, k: string) => string }) {
   const isAdmin = role === 'admin'
@@ -72,32 +154,6 @@ function TypeBadge({ role }: { role: string }) {
       background: `${c}18`, color: c, border: `0.5px solid ${c}55`,
       borderRadius: 6, padding: '2px 8px', fontSize: 11, fontWeight: 700,
     }}>{role}</span>
-  )
-}
-
-function KpiCard({ label, value, color, Icon, isDark }: {
-  label: string; value: string | number; color?: string
-  Icon?: React.ElementType; isDark: boolean
-}) {
-  return (
-    <div style={{
-      background: isDark ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.025)',
-      border: `0.5px solid ${isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.08)'}`,
-      borderRadius: 10, padding: '14px 16px',
-    }}>
-      <div style={{
-        fontSize: 11, color: isDark ? '#7a9bc5' : '#5F5E5A',
-        marginBottom: 6, display: 'flex', alignItems: 'center', gap: 5,
-      }}>
-        {Icon && <Icon size={12} aria-hidden />}{label}
-      </div>
-      <div style={{
-        fontSize: 22, fontWeight: 500,
-        color: color || (isDark ? '#e8f4ff' : '#0a1628'), lineHeight: 1,
-      }}>
-        {value}
-      </div>
-    </div>
   )
 }
 
@@ -168,7 +224,6 @@ export default function AdminPage() {
   const { t }  = useLang()
   const searchParams = useSearchParams()
 
-  /* ── couleurs ── */
   const textPri   = isDark ? '#e8f4ff'                : '#0a1628'
   const textSec   = isDark ? '#7a9bc5'                : '#5F5E5A'
   const borderCol = isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.08)'
@@ -180,8 +235,7 @@ export default function AdminPage() {
   const thBg      = isDark ? 'rgba(255,255,255,0.02)' : 'rgba(0,0,0,0.02)'
 
   const card: React.CSSProperties = {
-    background: cardBg,
-    border: `0.5px solid ${borderCol}`,
+    background: cardBg, border: `0.5px solid ${borderCol}`,
     borderRadius: 12, padding: 20,
     boxShadow: isDark ? '0 4px 24px rgba(0,0,0,0.3)' : '0 2px 8px rgba(0,0,0,0.06)',
   }
@@ -191,7 +245,6 @@ export default function AdminPage() {
     boxSizing: 'border-box', border: `0.5px solid ${inputBdr}`,
   }
   const selectS: React.CSSProperties = { ...inputS, cursor: 'pointer' }
-
   const btnPrimary = (c = '#185FA5'): React.CSSProperties => ({
     display: 'inline-flex', alignItems: 'center', gap: 6,
     padding: '7px 14px', borderRadius: 7, background: c,
@@ -203,7 +256,6 @@ export default function AdminPage() {
     color: c, border: `0.5px solid ${c}`, fontSize: 12, fontWeight: 500, cursor: 'pointer',
   })
 
-  /* ── view depuis URL ── */
   const [view, setView] = useState<AdminView>('users')
   useEffect(() => {
     const tab = searchParams?.get('tab')
@@ -211,7 +263,6 @@ export default function AdminPage() {
     else setView('users')
   }, [searchParams])
 
-  /* ── données ── */
   const [users,    setUsers]    = useState<User[]>([])
   const [nodes,    setNodes]    = useState<NodeAdmin[]>([])
   const [loadingU, setLoadingU] = useState(true)
@@ -221,30 +272,24 @@ export default function AdminPage() {
     setToast({ msg, ok }); setTimeout(() => setToast(null), 3500)
   }
 
-  /* ── filtre ── */
   const [userFilter, setUserFilter] = useState<'all' | 'admin' | 'operator' | 'inactive'>('all')
 
-  /* ── modals users ── */
-  const [showCreate,   setShowCreate]   = useState(false)
-  const [newUser,      setNewUser]      = useState({ full_name: '', email: '', role: 'operator' })
-  const [savingCreate, setSavingCreate] = useState(false)
-  const [createErr,    setCreateErr]    = useState('')
-
-  const [editUser,     setEditUser]     = useState<User | null>(null)
-  const [editUserForm, setEditUserForm] = useState({ full_name: '', email: '', role: '' })
-  const [savingEditU,  setSavingEditU]  = useState(false)
-  const [editUserErr,  setEditUserErr]  = useState('')
-
-  const [resetTarget, setResetTarget] = useState<User | null>(null)
-  const [newPwd,      setNewPwd]      = useState('')
-  const [showNewPwd,  setShowNewPwd]  = useState(false)
-  const [savingPwd,   setSavingPwd]   = useState(false)
-
-  const [expiryTarget, setExpiryTarget] = useState<User | null>(null)
-  const [expiryDate,   setExpiryDate]   = useState('')
-  const [savingExpiry, setSavingExpiry] = useState(false)
-  const [expiryErr,    setExpiryErr]    = useState('')
-
+  const [showCreate,    setShowCreate]    = useState(false)
+  const [newUser,       setNewUser]       = useState({ full_name: '', email: '', role: 'operator' })
+  const [savingCreate,  setSavingCreate]  = useState(false)
+  const [createErr,     setCreateErr]     = useState('')
+  const [editUser,      setEditUser]      = useState<User | null>(null)
+  const [editUserForm,  setEditUserForm]  = useState({ full_name: '', email: '', role: '' })
+  const [savingEditU,   setSavingEditU]   = useState(false)
+  const [editUserErr,   setEditUserErr]   = useState('')
+  const [resetTarget,   setResetTarget]   = useState<User | null>(null)
+  const [newPwd,        setNewPwd]        = useState('')
+  const [showNewPwd,    setShowNewPwd]    = useState(false)
+  const [savingPwd,     setSavingPwd]     = useState(false)
+  const [expiryTarget,  setExpiryTarget]  = useState<User | null>(null)
+  const [expiryDate,    setExpiryDate]    = useState('')
+  const [savingExpiry,  setSavingExpiry]  = useState(false)
+  const [expiryErr,     setExpiryErr]     = useState('')
   const [showChangePwd, setShowChangePwd] = useState(false)
   const [changePwdForm, setChangePwdForm] = useState({ old_password: '', new_password: '', confirm: '' })
   const [showOldPwd,    setShowOldPwd]    = useState(false)
@@ -252,13 +297,10 @@ export default function AdminPage() {
   const [showConfP,     setShowConfP]     = useState(false)
   const [savingChgPwd,  setSavingChgPwd]  = useState(false)
   const [changePwdErr,  setChangePwdErr]  = useState('')
-
-  /* ── modals nodes ── */
   const [showCreateNode, setShowCreateNode] = useState(false)
   const [newNode,        setNewNode]        = useState({ name: '', role: 'CCN', description: '', ip_address: '', server_type: '', port: '' })
   const [savingNode,     setSavingNode]     = useState(false)
   const [nodeErr,        setNodeErr]        = useState('')
-
   const [editNode,       setEditNode]       = useState<NodeAdmin | null>(null)
   const [editNodeForm,   setEditNodeForm]   = useState({ role: '', description: '', ip_address: '', server_type: '', port: '' })
   const [savingEditNode, setSavingEditNode] = useState(false)
@@ -266,7 +308,6 @@ export default function AdminPage() {
 
   const minDate = new Date(Date.now() + 60000).toISOString().slice(0, 16)
 
-  /* ── fetch ── */
   const fetchUsers = async () => {
     setLoadingU(true)
     try { const r = await adminApi.getUsers(); setUsers(r.users) }
@@ -281,7 +322,6 @@ export default function AdminPage() {
   }
   useEffect(() => { fetchUsers(); fetchNodes() }, [])
 
-  /* ── filtrage ── */
   const filteredUsers = users.filter(u => {
     if (userFilter === 'admin')    return u.role === 'admin'
     if (userFilter === 'operator') return u.role === 'operator'
@@ -289,19 +329,15 @@ export default function AdminPage() {
     return true
   })
 
-  /* ── stats ── */
   const adminCount = users.filter(u => u.role === 'admin').length
   const opCount    = users.filter(u => u.role === 'operator').length
   const neverCount = users.filter(u => !u.last_login).length
 
-  /* ── handlers users ── */
   const handleCreate = async () => {
     setCreateErr('')
     if (!newUser.full_name.trim()) { setCreateErr(t('admin', 'fullNameRequired')); return }
     if (!newUser.email.trim())     { setCreateErr(t('admin', 'emailRequired'));     return }
-    if (!newUser.email.includes('@') || newUser.email.indexOf('@') === 0) {
-      setCreateErr(t('admin', 'emailInvalid')); return
-    }
+    if (!newUser.email.includes('@') || newUser.email.indexOf('@') === 0) { setCreateErr(t('admin', 'emailInvalid')); return }
     setSavingCreate(true)
     try {
       const res  = await fetch(`${BASE_URL}/admin/users`, {
@@ -323,9 +359,7 @@ export default function AdminPage() {
   }
   const handleEditUser = async () => {
     if (!editUser) return; setEditUserErr('')
-    if (editUserForm.email && !editUserForm.email.includes('@')) {
-      setEditUserErr(t('admin', 'emailInvalid')); return
-    }
+    if (editUserForm.email && !editUserForm.email.includes('@')) { setEditUserErr(t('admin', 'emailInvalid')); return }
     setSavingEditU(true)
     try {
       await adminApi.updateUser(editUser.id, {
@@ -357,8 +391,7 @@ export default function AdminPage() {
   const openExpiry = (u: User) => {
     setExpiryTarget(u); setExpiryErr('')
     if (u.expires_at) {
-      const d   = new Date(u.expires_at)
-      const pad = (n: number) => String(n).padStart(2, '0')
+      const d = new Date(u.expires_at), pad = (n: number) => String(n).padStart(2, '0')
       setExpiryDate(`${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`)
     } else setExpiryDate('')
   }
@@ -374,11 +407,9 @@ export default function AdminPage() {
 
   const handleChangePwd = async () => {
     setChangePwdErr('')
-    if (!changePwdForm.old_password)           { setChangePwdErr(t('admin', 'oldPwdRequired'));   return }
-    if (changePwdForm.new_password.length < 6) { setChangePwdErr(t('admin', 'min6'));             return }
-    if (changePwdForm.new_password !== changePwdForm.confirm) {
-      setChangePwdErr(t('admin', 'passwordsNoMatch')); return
-    }
+    if (!changePwdForm.old_password)           { setChangePwdErr(t('admin', 'oldPwdRequired')); return }
+    if (changePwdForm.new_password.length < 6) { setChangePwdErr(t('admin', 'min6'));           return }
+    if (changePwdForm.new_password !== changePwdForm.confirm) { setChangePwdErr(t('admin', 'passwordsNoMatch')); return }
     setSavingChgPwd(true)
     try {
       const res  = await fetch(`${BASE_URL}/auth/change-password`, {
@@ -394,11 +425,9 @@ export default function AdminPage() {
     finally { setSavingChgPwd(false) }
   }
 
-  /* ── handlers nodes ── */
   const handleCreateNode = async () => {
     setNodeErr('')
-    if (!newNode.name || !newNode.description || !newNode.port ||
-        !newNode.ip_address.trim() || !newNode.server_type.trim()) {
+    if (!newNode.name || !newNode.description || !newNode.port || !newNode.ip_address.trim() || !newNode.server_type.trim()) {
       setNodeErr(t('admin', 'nodeFieldsRequired')); return
     }
     setSavingNode(true)
@@ -414,27 +443,17 @@ export default function AdminPage() {
 
   const openEditNode = (n: NodeAdmin) => {
     setEditNode(n); setEditNodeErr('')
-    setEditNodeForm({
-      role:        n.role,
-      description: n.description,
-      ip_address:  n.ip_address  || '',
-      server_type: n.server_type || '',
-      port:        String(n.port),
-    })
+    setEditNodeForm({ role: n.role, description: n.description, ip_address: n.ip_address || '', server_type: n.server_type || '', port: String(n.port) })
   }
   const handleEditNode = async () => {
     if (!editNode) return; setEditNodeErr('')
-    if (!editNodeForm.ip_address.trim() || !editNodeForm.server_type.trim() || !editNodeForm.port) {
-      setEditNodeErr(t('admin', 'nodeFieldsRequired')); return
-    }
+    if (!editNodeForm.ip_address.trim() || !editNodeForm.server_type.trim() || !editNodeForm.port) { setEditNodeErr(t('admin', 'nodeFieldsRequired')); return }
     setSavingEditNode(true)
     try {
       await adminApi.updateNode(editNode.name, {
-        role:        editNodeForm.role,
-        description: editNodeForm.description,
-        ip_address:  editNodeForm.ip_address.trim(),
-        server_type: editNodeForm.server_type.trim(),
-        port:        parseInt(editNodeForm.port),
+        role: editNodeForm.role, description: editNodeForm.description,
+        ip_address: editNodeForm.ip_address.trim(), server_type: editNodeForm.server_type.trim(),
+        port: parseInt(editNodeForm.port),
       })
       showToast(`Nœud "${editNode.name}" modifié`); setEditNode(null); fetchNodes()
     } catch (e) { setEditNodeErr(e instanceof Error ? e.message : 'Erreur') }
@@ -446,7 +465,6 @@ export default function AdminPage() {
     catch (e) { showToast(e instanceof Error ? e.message : 'Erreur', false) }
   }
 
-  /* ══════════════════════════════════════════ RENDU ══ */
   return (
     <DashboardLayout>
 
@@ -461,58 +479,62 @@ export default function AdminPage() {
         }}>{toast.msg}</div>
       )}
 
-      {/* ── En-tête de page ── */}
+      {/* ── En-tête Option B ── */}
       <div style={{
-        display: 'flex', alignItems: 'center',
-        marginBottom: 24,
+        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+        borderBottom: `0.5px solid ${borderCol}`, paddingBottom: 16, marginBottom: 24,
       }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-          <div style={{
-            width: 36, height: 36, borderRadius: 9,
-            background: 'rgba(163,45,45,0.12)',
-            border: '0.5px solid rgba(163,45,45,0.3)',
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-          }}>
-            <ShieldCheck size={17} style={{ color: '#A32D2D' }} aria-hidden />
+        <div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 6 }}>
+            <span style={{ fontSize: 12, color: textSec }}>Administration</span>
+            <span style={{ fontSize: 12, color: isDark ? 'rgba(255,255,255,0.2)' : 'rgba(0,0,0,0.25)' }}>/</span>
+            <span style={{ fontSize: 12, color: '#185FA5', fontWeight: 500 }}>
+              {view === 'users' ? 'Utilisateurs' : 'Nœuds réseau'}
+            </span>
           </div>
-          <div>
-            <h1 style={{ fontSize: 18, fontWeight: 500, color: textPri, margin: 0, lineHeight: 1 }}>
-              {view === 'users' ? t('admin', 'users') : t('admin', 'nodes')}
-            </h1>
-            <p style={{ fontSize: 12, color: textSec, margin: '3px 0 0' }}>
-              {view === 'users'
-                ? 'Gestion des comptes utilisateurs'
-                : 'Gestion de l\'infrastructure réseau'}
-            </p>
-          </div>
+          <h1 style={{ fontSize: 22, fontWeight: 500, color: textPri, margin: 0, lineHeight: 1 }}>
+            {view === 'users' ? 'Gestion des utilisateurs' : 'Gestion des nœuds réseau'}
+          </h1>
+          <p style={{ fontSize: 13, color: textSec, margin: '5px 0 0' }}>
+            {view === 'users'
+              ? 'Comptes, rôles et accès à la plateforme TTCS'
+              : 'Infrastructure Ericsson Charging System'}
+          </p>
         </div>
+        <span style={{
+          fontSize: 11, fontWeight: 500, padding: '5px 13px', borderRadius: 20,
+          background: isDark ? 'rgba(24,95,165,0.2)' : '#E6F1FB',
+          color: isDark ? '#85B7EB' : '#0C447C',
+          border: `0.5px solid ${isDark ? 'rgba(133,183,235,0.4)' : '#85B7EB'}`,
+          display: 'flex', alignItems: 'center', gap: 5, whiteSpace: 'nowrap' as const,
+        }}>
+          <ShieldCheck size={13} aria-hidden />
+          Espace admin
+        </span>
       </div>
 
-      {/* ══════════════ VUE UTILISATEURS ══════════════ */}
+      {/* ══════════ VUE UTILISATEURS ══════════ */}
       {view === 'users' && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
 
-          {/* KPIs */}
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,minmax(0,1fr))', gap: 10 }}>
-            <KpiCard label="Total comptes"   value={users.length}  Icon={Users}       isDark={isDark} />
-            <KpiCard label="Administrateurs" value={adminCount}    Icon={Crown}       isDark={isDark} color="#185FA5" />
-            <KpiCard label="Opérateurs"      value={opCount}       Icon={UserIcon}    isDark={isDark} color="#3B6D11" />
-            <KpiCard label="Jamais connecté" value={neverCount}    Icon={AlertCircle} isDark={isDark} color={neverCount > 0 ? '#A32D2D' : undefined} />
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,minmax(0,1fr))', gap: 12 }}>
+            <UserKpiCard label="Total comptes"   value={users.length} sub={`${users.length} compte${users.length > 1 ? 's' : ''} enregistré${users.length > 1 ? 's' : ''}`} Icon={Users}       accent="#185FA5" isDark={isDark} />
+            <UserKpiCard label="Administrateurs" value={adminCount}   sub="Accès complet à la plateforme"                                                                    Icon={Crown}       accent="#A32D2D" isDark={isDark} />
+            <UserKpiCard label="Opérateurs"      value={opCount}      sub="Accès supervision uniquement"                                                                     Icon={UserIcon}    accent="#3B6D11" isDark={isDark} />
+            <UserKpiCard label="Jamais connecté" value={neverCount}   sub={neverCount > 0 ? 'Comptes à vérifier' : 'Tous les comptes sont actifs'}                          Icon={AlertCircle} accent={neverCount > 0 ? '#A32D2D' : '#3B6D11'} isDark={isDark} />
           </div>
 
-          {/* table */}
           <div style={card}>
-            {/* toolbar */}
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 16, flexWrap: 'wrap' }}>
               <span style={{ fontSize: 12, fontWeight: 500, color: textPri }}>
                 {filteredUsers.length} compte{filteredUsers.length > 1 ? 's' : ''}
               </span>
               <div style={{ display: 'flex', gap: 4, marginLeft: 8 }}>
                 {([
-                  { key: 'all',      label: 'Tous'           },
-                  { key: 'admin',    label: 'Admin'          },
-                  { key: 'operator', label: 'Opérateur'      },
-                  { key: 'inactive', label: 'Jamais connecté'},
+                  { key: 'all',      label: 'Tous'            },
+                  { key: 'admin',    label: 'Admin'           },
+                  { key: 'operator', label: 'Opérateur'       },
+                  { key: 'inactive', label: 'Jamais connecté' },
                 ] as const).map(f => (
                   <button key={f.key} onClick={() => setUserFilter(f.key)} style={{
                     padding: '4px 10px', borderRadius: 14, fontSize: 11, cursor: 'pointer',
@@ -540,20 +562,8 @@ export default function AdminPage() {
                   <table style={{ width: '100%', borderCollapse: 'collapse' }}>
                     <thead>
                       <tr style={{ borderBottom: `0.5px solid ${borderCol}` }}>
-                        {[
-                          t('admin','username'),
-                          t('admin','fullName'),
-                          t('admin','email'),
-                          t('admin','role'),
-                          t('admin','expiration'),
-                          t('admin','lastLogin'),
-                          t('admin','actions'),
-                        ].map(h => (
-                          <th key={h} style={{
-                            padding: '8px 12px', textAlign: 'left', fontSize: 10,
-                            fontWeight: 500, color: textSec,
-                            textTransform: 'uppercase', letterSpacing: '.6px', background: thBg,
-                          }}>{h}</th>
+                        {[t('admin','username'), t('admin','fullName'), t('admin','email'), t('admin','role'), t('admin','expiration'), t('admin','lastLogin'), t('admin','actions')].map(h => (
+                          <th key={h} style={{ padding: '8px 12px', textAlign: 'left', fontSize: 10, fontWeight: 500, color: textSec, textTransform: 'uppercase', letterSpacing: '.6px', background: thBg }}>{h}</th>
                         ))}
                       </tr>
                     </thead>
@@ -594,21 +604,13 @@ export default function AdminPage() {
                             </td>
                             <td style={{ padding: '10px 12px' }}>
                               <div style={{ display: 'flex', gap: 4 }}>
-                                <ActionBtn onClick={() => openEditUser(u)} color="#185FA5" title="Modifier">
-                                  <Pencil size={12} />
-                                </ActionBtn>
+                                <ActionBtn onClick={() => openEditUser(u)} color="#185FA5" title="Modifier"><Pencil size={12} /></ActionBtn>
                                 {u.role === 'operator' && (
-                                  <ActionBtn onClick={() => openExpiry(u)} color="#534AB7" title="Expiration">
-                                    <Clock size={12} />
-                                  </ActionBtn>
+                                  <ActionBtn onClick={() => openExpiry(u)} color="#534AB7" title="Expiration"><Clock size={12} /></ActionBtn>
                                 )}
-                                <ActionBtn onClick={() => { setResetTarget(u); setNewPwd('') }} color="#854F0B" title="Réinitialiser MDP">
-                                  <KeyRound size={12} />
-                                </ActionBtn>
+                                <ActionBtn onClick={() => { setResetTarget(u); setNewPwd('') }} color="#854F0B" title="Réinitialiser MDP"><KeyRound size={12} /></ActionBtn>
                                 {u.username !== 'admin' && (
-                                  <ActionBtn onClick={() => handleDelete(u)} color="#A32D2D" title="Supprimer">
-                                    <Trash2 size={12} />
-                                  </ActionBtn>
+                                  <ActionBtn onClick={() => handleDelete(u)} color="#A32D2D" title="Supprimer"><Trash2 size={12} /></ActionBtn>
                                 )}
                               </div>
                             </td>
@@ -630,22 +632,16 @@ export default function AdminPage() {
         </div>
       )}
 
-      {/* ══════════════ VUE NŒUDS ══════════════ */}
+      {/* ══════════ VUE NŒUDS ══════════ */}
       {view === 'nodes' && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
 
-          {/* KPIs par type */}
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(6,minmax(0,1fr))', gap: 10 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(6,minmax(0,1fr))', gap: 12 }}>
             {ROLES.map(r => (
-              <KpiCard
-                key={r} label={r}
-                value={nodes.filter(n => n.role === r).length}
-                isDark={isDark} color={ROLE_COLOR[r]}
-              />
+              <NodeKpiCard key={r} role={r} count={nodes.filter(n => n.role === r).length} isDark={isDark} />
             ))}
           </div>
 
-          {/* table */}
           <div style={card}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16, flexWrap: 'wrap', gap: 8 }}>
               <span style={{ fontSize: 12, fontWeight: 500, color: textPri }}>
@@ -668,11 +664,7 @@ export default function AdminPage() {
                   <thead>
                     <tr style={{ borderBottom: `0.5px solid ${borderCol}` }}>
                       {['Nœud', 'Type', 'Description', 'Adresse IP', 'Port', 'Serveur', 'Actions'].map(h => (
-                        <th key={h} style={{
-                          padding: '8px 12px', textAlign: 'left', fontSize: 10,
-                          fontWeight: 500, color: textSec,
-                          textTransform: 'uppercase', letterSpacing: '.6px', background: thBg,
-                        }}>{h}</th>
+                        <th key={h} style={{ padding: '8px 12px', textAlign: 'left', fontSize: 10, fontWeight: 500, color: textSec, textTransform: 'uppercase', letterSpacing: '.6px', background: thBg }}>{h}</th>
                       ))}
                     </tr>
                   </thead>
@@ -693,33 +685,18 @@ export default function AdminPage() {
                             }}>
                               <Server size={13} style={{ color: ROLE_COLOR[n.role] || '#5F5E5A' }} aria-hidden />
                             </div>
-                            {/* ✅ display_name uniquement — nom technique supprimé */}
-                            <span style={{ fontSize: 12, fontWeight: 500, color: textPri }}>
-                              {n.display_name || n.name}
-                            </span>
+                            <span style={{ fontSize: 12, fontWeight: 500, color: textPri }}>{n.display_name || n.name}</span>
                           </div>
                         </td>
                         <td style={{ padding: '10px 12px' }}><TypeBadge role={n.role} /></td>
-                        <td style={{ padding: '10px 12px', fontSize: 11, color: textSec, maxWidth: 160, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                          {n.description}
-                        </td>
-                        <td style={{ padding: '10px 12px', fontSize: 11, color: textSec, fontFamily: 'monospace' }}>
-                          {n.ip_address || '—'}
-                        </td>
-                        <td style={{ padding: '10px 12px', fontSize: 11, color: textSec, fontFamily: 'monospace' }}>
-                          {n.port}
-                        </td>
-                        <td style={{ padding: '10px 12px', fontSize: 11, color: textSec, maxWidth: 160, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                          {n.server_type || '—'}
-                        </td>
+                        <td style={{ padding: '10px 12px', fontSize: 11, color: textSec, maxWidth: 160, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{n.description}</td>
+                        <td style={{ padding: '10px 12px', fontSize: 11, color: textSec, fontFamily: 'monospace' }}>{n.ip_address || '—'}</td>
+                        <td style={{ padding: '10px 12px', fontSize: 11, color: textSec, fontFamily: 'monospace' }}>{n.port}</td>
+                        <td style={{ padding: '10px 12px', fontSize: 11, color: textSec, maxWidth: 160, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{n.server_type || '—'}</td>
                         <td style={{ padding: '10px 12px' }}>
                           <div style={{ display: 'flex', gap: 4 }}>
-                            <ActionBtn onClick={() => openEditNode(n)} color="#185FA5" title="Modifier">
-                              <Pencil size={12} />
-                            </ActionBtn>
-                            <ActionBtn onClick={() => handleDeleteNode(n.name)} color="#A32D2D" title="Supprimer">
-                              <Trash2 size={12} />
-                            </ActionBtn>
+                            <ActionBtn onClick={() => openEditNode(n)} color="#185FA5" title="Modifier"><Pencil size={12} /></ActionBtn>
+                            <ActionBtn onClick={() => handleDeleteNode(n.name)} color="#A32D2D" title="Supprimer"><Trash2 size={12} /></ActionBtn>
                           </div>
                         </td>
                       </tr>
@@ -734,133 +711,79 @@ export default function AdminPage() {
 
       {/* ══════════════════ MODALS ══════════════════ */}
 
-      {/* Créer utilisateur */}
       {showCreate && (
         <Modal title={t('admin', 'createUser')} onClose={() => { setShowCreate(false); setCreateErr('') }} isDark={isDark}>
           <div style={{ background: isDark ? 'rgba(24,95,165,0.1)' : '#f0f7ff', border: '0.5px solid rgba(24,95,165,0.25)', borderRadius: 8, padding: '10px 14px', fontSize: 11, color: textSec, lineHeight: 1.6 }}>
             Le login et le mot de passe sont générés automatiquement et envoyés par email.
           </div>
-          <Field label={t('admin', 'fullNameLabel')}>
-            <input style={inputS} placeholder="Ex : Ghassen Chelly"
-              value={newUser.full_name} onChange={e => setNewUser(p => ({ ...p, full_name: e.target.value }))} />
-          </Field>
-          <Field label={t('admin', 'emailLabel')}>
-            <input style={inputS} type="email" placeholder="Ex : ghassen@tunisietelecom.tn"
-              value={newUser.email} onChange={e => setNewUser(p => ({ ...p, email: e.target.value }))} />
-          </Field>
+          <Field label={t('admin', 'fullNameLabel')}><input style={inputS} placeholder="Ex : Ghassen Chelly" value={newUser.full_name} onChange={e => setNewUser(p => ({ ...p, full_name: e.target.value }))} /></Field>
+          <Field label={t('admin', 'emailLabel')}><input style={inputS} type="email" placeholder="Ex : ghassen@tunisietelecom.tn" value={newUser.email} onChange={e => setNewUser(p => ({ ...p, email: e.target.value }))} /></Field>
           <Field label={t('admin', 'roleLabel')}>
             <select style={selectS} value={newUser.role} onChange={e => setNewUser(p => ({ ...p, role: e.target.value }))}>
               <option value="operator">{t('admin', 'operator')}</option>
               <option value="admin">{t('admin', 'admin')}</option>
             </select>
           </Field>
-          {createErr && (
-            <p style={{ color: '#A32D2D', fontSize: 12, background: 'rgba(163,45,45,0.08)', padding: '8px 12px', borderRadius: 7, margin: 0 }}>
-              {createErr}
-            </p>
-          )}
+          {createErr && <p style={{ color: '#A32D2D', fontSize: 12, background: 'rgba(163,45,45,0.08)', padding: '8px 12px', borderRadius: 7, margin: 0 }}>{createErr}</p>}
           <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
-            <button onClick={() => { setShowCreate(false); setCreateErr('') }} style={btnOutline('#5F5E5A')}>
-              {t('admin', 'cancel')}
-            </button>
-            <button onClick={handleCreate} disabled={savingCreate} style={btnPrimary()}>
-              {savingCreate ? t('admin', 'creating') : t('admin', 'createAndSend')}
-            </button>
+            <button onClick={() => { setShowCreate(false); setCreateErr('') }} style={btnOutline('#5F5E5A')}>{t('admin', 'cancel')}</button>
+            <button onClick={handleCreate} disabled={savingCreate} style={btnPrimary()}>{savingCreate ? t('admin', 'creating') : t('admin', 'createAndSend')}</button>
           </div>
         </Modal>
       )}
 
-      {/* Modifier utilisateur */}
       {editUser && (
         <Modal title={`Modifier — ${editUser.username}`} onClose={() => { setEditUser(null); setEditUserErr('') }} isDark={isDark}>
-          <Field label={t('admin', 'fullName')}>
-            <input style={inputS} value={editUserForm.full_name}
-              onChange={e => setEditUserForm(p => ({ ...p, full_name: e.target.value }))} />
-          </Field>
-          <Field label={t('admin', 'email')}>
-            <input style={inputS} type="email" value={editUserForm.email}
-              onChange={e => setEditUserForm(p => ({ ...p, email: e.target.value }))} />
-          </Field>
+          <Field label={t('admin', 'fullName')}><input style={inputS} value={editUserForm.full_name} onChange={e => setEditUserForm(p => ({ ...p, full_name: e.target.value }))} /></Field>
+          <Field label={t('admin', 'email')}><input style={inputS} type="email" value={editUserForm.email} onChange={e => setEditUserForm(p => ({ ...p, email: e.target.value }))} /></Field>
           <Field label={t('admin', 'roleLabel')}>
-            <select style={selectS} value={editUserForm.role}
-              onChange={e => setEditUserForm(p => ({ ...p, role: e.target.value }))}>
+            <select style={selectS} value={editUserForm.role} onChange={e => setEditUserForm(p => ({ ...p, role: e.target.value }))}>
               <option value="operator">{t('admin', 'operator')}</option>
               <option value="admin">{t('admin', 'admin')}</option>
             </select>
           </Field>
-          {editUserErr && (
-            <p style={{ color: '#A32D2D', fontSize: 12, background: 'rgba(163,45,45,0.08)', padding: '8px 12px', borderRadius: 7, margin: 0 }}>
-              {editUserErr}
-            </p>
-          )}
+          {editUserErr && <p style={{ color: '#A32D2D', fontSize: 12, background: 'rgba(163,45,45,0.08)', padding: '8px 12px', borderRadius: 7, margin: 0 }}>{editUserErr}</p>}
           <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
-            <button onClick={() => { setEditUser(null); setEditUserErr('') }} style={btnOutline('#5F5E5A')}>
-              {t('admin', 'cancel')}
-            </button>
-            <button onClick={handleEditUser} disabled={savingEditU} style={btnPrimary()}>
-              {savingEditU ? t('admin', 'saving') : t('admin', 'save')}
-            </button>
+            <button onClick={() => { setEditUser(null); setEditUserErr('') }} style={btnOutline('#5F5E5A')}>{t('admin', 'cancel')}</button>
+            <button onClick={handleEditUser} disabled={savingEditU} style={btnPrimary()}>{savingEditU ? t('admin', 'saving') : t('admin', 'save')}</button>
           </div>
         </Modal>
       )}
 
-      {/* Expiration */}
       {expiryTarget && (
         <Modal title={`Expiration — ${expiryTarget.username}`} onClose={() => { setExpiryTarget(null); setExpiryErr('') }} isDark={isDark}>
           <Field label={t('admin', 'newExpiry')} hint={t('admin', 'expiryHint')}>
-            <input style={inputS} type="datetime-local" min={minDate}
-              value={expiryDate} onChange={e => setExpiryDate(e.target.value)} />
+            <input style={inputS} type="datetime-local" min={minDate} value={expiryDate} onChange={e => setExpiryDate(e.target.value)} />
           </Field>
-          {expiryErr && (
-            <p style={{ color: '#A32D2D', fontSize: 12, background: 'rgba(163,45,45,0.08)', padding: '8px 12px', borderRadius: 7, margin: 0 }}>
-              {expiryErr}
-            </p>
-          )}
+          {expiryErr && <p style={{ color: '#A32D2D', fontSize: 12, background: 'rgba(163,45,45,0.08)', padding: '8px 12px', borderRadius: 7, margin: 0 }}>{expiryErr}</p>}
           <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
-            <button onClick={() => { setExpiryTarget(null); setExpiryErr('') }} style={btnOutline('#5F5E5A')}>
-              {t('admin', 'cancel')}
-            </button>
-            {expiryDate && (
-              <button onClick={() => setExpiryDate('')} style={btnOutline('#5F5E5A')}>
-                <X size={12} aria-hidden /> {t('admin', 'removeLimit')}
-              </button>
-            )}
+            <button onClick={() => { setExpiryTarget(null); setExpiryErr('') }} style={btnOutline('#5F5E5A')}>{t('admin', 'cancel')}</button>
+            {expiryDate && <button onClick={() => setExpiryDate('')} style={btnOutline('#5F5E5A')}><X size={12} aria-hidden /> {t('admin', 'removeLimit')}</button>}
             <button onClick={handleSetExpiry} disabled={savingExpiry} style={btnPrimary('#534AB7')}>
-              <Clock size={13} aria-hidden />
-              {savingExpiry ? t('admin', 'saving') : t('admin', 'save')}
+              <Clock size={13} aria-hidden />{savingExpiry ? t('admin', 'saving') : t('admin', 'save')}
             </button>
           </div>
         </Modal>
       )}
 
-      {/* Reset password */}
       {resetTarget && (
         <Modal title={t('admin', 'resetPassword')} onClose={() => { setResetTarget(null); setNewPwd('') }} isDark={isDark}>
-          <p style={{ color: textSec, fontSize: 12, margin: 0 }}>
-            Utilisateur : <strong style={{ color: textPri }}>{resetTarget.username}</strong>
-          </p>
+          <p style={{ color: textSec, fontSize: 12, margin: 0 }}>Utilisateur : <strong style={{ color: textPri }}>{resetTarget.username}</strong></p>
           <Field label={t('admin', 'newPassword')}>
             <div style={{ position: 'relative' }}>
-              <input style={{ ...inputS, paddingRight: 40 }}
-                type={showNewPwd ? 'text' : 'password'} placeholder="••••••••"
-                value={newPwd} onChange={e => setNewPwd(e.target.value)} />
+              <input style={{ ...inputS, paddingRight: 40 }} type={showNewPwd ? 'text' : 'password'} placeholder="••••••••" value={newPwd} onChange={e => setNewPwd(e.target.value)} />
               <button onClick={() => setShowNewPwd(p => !p)} style={{ position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', color: textSec, display: 'flex' }}>
                 {showNewPwd ? <EyeOff size={14} /> : <Eye size={14} />}
               </button>
             </div>
           </Field>
           <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
-            <button onClick={() => { setResetTarget(null); setNewPwd('') }} style={btnOutline('#5F5E5A')}>
-              {t('admin', 'cancel')}
-            </button>
-            <button onClick={handleResetPwd} disabled={savingPwd || !newPwd} style={btnPrimary('#854F0B')}>
-              {savingPwd ? t('admin', 'saving') : t('admin', 'reset')}
-            </button>
+            <button onClick={() => { setResetTarget(null); setNewPwd('') }} style={btnOutline('#5F5E5A')}>{t('admin', 'cancel')}</button>
+            <button onClick={handleResetPwd} disabled={savingPwd || !newPwd} style={btnPrimary('#854F0B')}>{savingPwd ? t('admin', 'saving') : t('admin', 'reset')}</button>
           </div>
         </Modal>
       )}
 
-      {/* Changer mot de passe */}
       {showChangePwd && (
         <Modal title={t('admin', 'changePassword')} onClose={() => { setShowChangePwd(false); setChangePwdErr('') }} isDark={isDark}>
           {([
@@ -870,34 +793,23 @@ export default function AdminPage() {
           ]).map(f => (
             <Field key={f.key} label={f.label}>
               <div style={{ position: 'relative' }}>
-                <input style={{ ...inputS, paddingRight: 40 }}
-                  type={f.show ? 'text' : 'password'} placeholder="••••••••"
-                  value={f.val}
-                  onChange={e => setChangePwdForm(p => ({ ...p, [f.key]: e.target.value }))} />
+                <input style={{ ...inputS, paddingRight: 40 }} type={f.show ? 'text' : 'password'} placeholder="••••••••" value={f.val} onChange={e => setChangePwdForm(p => ({ ...p, [f.key]: e.target.value }))} />
                 <button onClick={f.toggle} style={{ position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', color: textSec, display: 'flex' }}>
                   {f.show ? <EyeOff size={14} /> : <Eye size={14} />}
                 </button>
               </div>
             </Field>
           ))}
-          {changePwdErr && (
-            <p style={{ color: '#A32D2D', fontSize: 12, background: 'rgba(163,45,45,0.08)', padding: '8px 12px', borderRadius: 7, margin: 0 }}>
-              {changePwdErr}
-            </p>
-          )}
+          {changePwdErr && <p style={{ color: '#A32D2D', fontSize: 12, background: 'rgba(163,45,45,0.08)', padding: '8px 12px', borderRadius: 7, margin: 0 }}>{changePwdErr}</p>}
           <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
-            <button onClick={() => { setShowChangePwd(false); setChangePwdErr('') }} style={btnOutline('#5F5E5A')}>
-              {t('admin', 'cancel')}
-            </button>
+            <button onClick={() => { setShowChangePwd(false); setChangePwdErr('') }} style={btnOutline('#5F5E5A')}>{t('admin', 'cancel')}</button>
             <button onClick={handleChangePwd} disabled={savingChgPwd} style={btnPrimary('#534AB7')}>
-              <Lock size={13} aria-hidden />
-              {savingChgPwd ? t('admin', 'changing') : t('admin', 'changePassword')}
+              <Lock size={13} aria-hidden />{savingChgPwd ? t('admin', 'changing') : t('admin', 'changePassword')}
             </button>
           </div>
         </Modal>
       )}
 
-      {/* Créer nœud */}
       {showCreateNode && (
         <Modal title={t('admin', 'addNode')} onClose={() => { setShowCreateNode(false); setNodeErr('') }} isDark={isDark}>
           {([
@@ -908,39 +820,26 @@ export default function AdminPage() {
             { label: t('admin', 'port'),        key: 'port',        placeholder: '9107',                        type: 'number' },
           ] as const).map(f => (
             <Field key={f.key} label={f.label}>
-              <input style={inputS} type={f.type} placeholder={f.placeholder}
-                value={(newNode as Record<string, string>)[f.key]}
-                onChange={e => setNewNode(p => ({ ...p, [f.key]: e.target.value }))} />
+              <input style={inputS} type={f.type} placeholder={f.placeholder} value={(newNode as Record<string, string>)[f.key]} onChange={e => setNewNode(p => ({ ...p, [f.key]: e.target.value }))} />
             </Field>
           ))}
           <Field label={t('admin', 'role')}>
-            <select style={selectS} value={newNode.role}
-              onChange={e => setNewNode(p => ({ ...p, role: e.target.value }))}>
+            <select style={selectS} value={newNode.role} onChange={e => setNewNode(p => ({ ...p, role: e.target.value }))}>
               {ROLES.map(r => <option key={r} value={r}>{r}</option>)}
             </select>
           </Field>
-          {nodeErr && (
-            <p style={{ color: '#A32D2D', fontSize: 12, background: 'rgba(163,45,45,0.08)', padding: '8px 12px', borderRadius: 7, margin: 0 }}>
-              {nodeErr}
-            </p>
-          )}
+          {nodeErr && <p style={{ color: '#A32D2D', fontSize: 12, background: 'rgba(163,45,45,0.08)', padding: '8px 12px', borderRadius: 7, margin: 0 }}>{nodeErr}</p>}
           <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
-            <button onClick={() => { setShowCreateNode(false); setNodeErr('') }} style={btnOutline('#5F5E5A')}>
-              {t('admin', 'cancel')}
-            </button>
-            <button onClick={handleCreateNode} disabled={savingNode} style={btnPrimary()}>
-              {savingNode ? t('admin', 'adding') : t('admin', 'add')}
-            </button>
+            <button onClick={() => { setShowCreateNode(false); setNodeErr('') }} style={btnOutline('#5F5E5A')}>{t('admin', 'cancel')}</button>
+            <button onClick={handleCreateNode} disabled={savingNode} style={btnPrimary()}>{savingNode ? t('admin', 'adding') : t('admin', 'add')}</button>
           </div>
         </Modal>
       )}
 
-      {/* Modifier nœud */}
       {editNode && (
         <Modal title={`Modifier — ${editNode.display_name || editNode.name}`} onClose={() => { setEditNode(null); setEditNodeErr('') }} isDark={isDark}>
           <Field label={t('admin', 'role')}>
-            <select style={selectS} value={editNodeForm.role}
-              onChange={e => setEditNodeForm(p => ({ ...p, role: e.target.value }))}>
+            <select style={selectS} value={editNodeForm.role} onChange={e => setEditNodeForm(p => ({ ...p, role: e.target.value }))}>
               {ROLES.map(r => <option key={r} value={r}>{r}</option>)}
             </select>
           </Field>
@@ -951,23 +850,13 @@ export default function AdminPage() {
             { label: t('admin', 'port'),        key: 'port',        placeholder: '9101',                     type: 'number' },
           ] as const).map(f => (
             <Field key={f.key} label={f.label}>
-              <input style={inputS} type={f.type} placeholder={f.placeholder}
-                value={(editNodeForm as Record<string, string>)[f.key]}
-                onChange={e => setEditNodeForm(p => ({ ...p, [f.key]: e.target.value }))} />
+              <input style={inputS} type={f.type} placeholder={f.placeholder} value={(editNodeForm as Record<string, string>)[f.key]} onChange={e => setEditNodeForm(p => ({ ...p, [f.key]: e.target.value }))} />
             </Field>
           ))}
-          {editNodeErr && (
-            <p style={{ color: '#A32D2D', fontSize: 12, background: 'rgba(163,45,45,0.08)', padding: '8px 12px', borderRadius: 7, margin: 0 }}>
-              {editNodeErr}
-            </p>
-          )}
+          {editNodeErr && <p style={{ color: '#A32D2D', fontSize: 12, background: 'rgba(163,45,45,0.08)', padding: '8px 12px', borderRadius: 7, margin: 0 }}>{editNodeErr}</p>}
           <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
-            <button onClick={() => { setEditNode(null); setEditNodeErr('') }} style={btnOutline('#5F5E5A')}>
-              {t('admin', 'cancel')}
-            </button>
-            <button onClick={handleEditNode} disabled={savingEditNode} style={btnPrimary()}>
-              {savingEditNode ? t('admin', 'saving') : t('admin', 'save')}
-            </button>
+            <button onClick={() => { setEditNode(null); setEditNodeErr('') }} style={btnOutline('#5F5E5A')}>{t('admin', 'cancel')}</button>
+            <button onClick={handleEditNode} disabled={savingEditNode} style={btnPrimary()}>{savingEditNode ? t('admin', 'saving') : t('admin', 'save')}</button>
           </div>
         </Modal>
       )}
@@ -975,10 +864,7 @@ export default function AdminPage() {
       <style>{`
         @keyframes slideIn { from { opacity:0;transform:translateX(16px) } to { opacity:1;transform:translateX(0) } }
         input[type="datetime-local"] { color-scheme: ${isDark ? 'dark' : 'light'} }
-        select option {
-          background: ${isDark ? '#1a1d2e' : '#ffffff'} !important;
-          color: ${isDark ? '#e8f4ff' : '#0a1628'} !important;
-        }
+        select option { background:${isDark ? '#1a1d2e' : '#ffffff'} !important; color:${isDark ? '#e8f4ff' : '#0a1628'} !important }
       `}</style>
     </DashboardLayout>
   )

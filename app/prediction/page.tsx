@@ -21,6 +21,8 @@ const BASE_URL = 'http://192.168.147.129:8000'
 interface ApiResponse {
   timestamp: string
   sdp_nodes: Record<string, {
+    display: string
+    source: string
     statistiques: {
       nb_points: number
       periode_debut: string
@@ -52,6 +54,7 @@ interface ApiResponse {
     success_max: number
     success_min: number
     success_std: number
+    error?: string
   }>
   global: {
     risk_level: string
@@ -87,29 +90,36 @@ interface CIPSession {
   risk_level: string
   risk_score: number
   interpretation: string
+  fail_rate: number
 }
+
+// ─── Mapping des 6 nœuds ─────────────────────────────────────────────────────
 
 const SESSION_COLORS = [
-  { color: '#185FA5', light: '#E6F1FB', dark: '#0C447C' },
-  { color: '#0F6E56', light: '#E1F5EE', dark: '#085041' },
-  { color: '#534AB7', light: '#EEEDFE', dark: '#3C3489' },
-  { color: '#854F0B', light: '#FAEEDA', dark: '#633806' },
+  { color: '#185FA5', light: '#E6F1FB', dark: '#0C447C' },  // SDP  — bleu
+  { color: '#0F6E56', light: '#E1F5EE', dark: '#085041' },  // AIR  — teal
+  { color: '#534AB7', light: '#EEEDFE', dark: '#3C3489' },  // OCC  — violet
+  { color: '#854F0B', light: '#FAEEDA', dark: '#633806' },  // CCN  — ambre
+  { color: '#A32D2D', light: '#FCEBEB', dark: '#7f1d1d' },  // VS   — rouge
+  { color: '#1e6091', light: '#e8f4f8', dark: '#154360' },  // AF   — bleu foncé
 ]
 
-const SESSION_META: Record<string, { label: string; filename: string; colorIdx: number }> = {
-  SDP1:  { label: 'Session A', filename: 'SDP1_CIP_filtered.csv',   colorIdx: 0 },
-  SDP21: { label: 'Session B', filename: 'SDP21_CIP_filtered1.csv', colorIdx: 1 },
-  SDP2:  { label: 'Session C', filename: 'SDP2_CIP_filtered.csv',   colorIdx: 2 },
-  SDP20: { label: 'Session D', filename: 'SDP20_CIP_filtered1.csv', colorIdx: 3 },
+const SESSION_META: Record<string, { label: string; colorIdx: number }> = {
+  SDP:  { label: 'SDP-Node-01',  colorIdx: 0 },
+  AIR:  { label: 'AIR-Node-01',  colorIdx: 1 },
+  OCC:  { label: 'OCC-Node-01',  colorIdx: 2 },
+  CCN:  { label: 'CCN-Node-01',  colorIdx: 3 },
+  VS:   { label: 'VS-Node-01',   colorIdx: 4 },
+  AF:   { label: 'AF-Node-01',   colorIdx: 5 },
 }
 
-const ORDER = ['SDP1', 'SDP21', 'SDP2', 'SDP20']
+const ORDER = ['SDP', 'AIR', 'OCC', 'CCN', 'VS', 'AF']
 
 // ─── Conversion API → CIPSession ─────────────────────────────────────────────
 
 function apiToSessions(api: ApiResponse): CIPSession[] {
   return ORDER
-    .filter(k => api.sdp_nodes[k])
+    .filter(k => api.sdp_nodes[k] && !api.sdp_nodes[k].error)
     .map(key => {
       const node  = api.sdp_nodes[key]
       const meta  = SESSION_META[key]
@@ -117,21 +127,21 @@ function apiToSessions(api: ApiResponse): CIPSession[] {
       const stats = node.statistiques
       const pred  = node.prediction
 
-      const dateStr  = stats.periode_debut.slice(0, 10)
-      const startStr = stats.periode_debut.slice(11, 16)
-      const endStr   = stats.periode_fin.slice(11, 16)
+      const dateStr  = stats?.periode_debut?.slice(0, 10)  ?? ''
+      const startStr = stats?.periode_debut?.slice(11, 16) ?? ''
+      const endStr   = stats?.periode_fin?.slice(11, 16)   ?? ''
 
       return {
         key,
         label:      meta.label,
-        filename:   meta.filename,
-        avg:        node.success_avg,
-        max:        node.success_max,
-        min:        node.success_min,
-        total:      Math.round(node.success_avg * stats.nb_points),
-        std:        node.success_std,
-        trend_pct:  node.trend_pct,
-        zscore_last: pred.z_score_actuel,
+        filename:   node.source ?? key,
+        avg:        node.success_avg ?? 0,
+        max:        node.success_max ?? 0,
+        min:        node.success_min ?? 0,
+        total:      Math.round((node.success_avg ?? 0) * (stats?.nb_points ?? 0)),
+        std:        node.success_std ?? 0,
+        trend_pct:  node.trend_pct ?? 0,
+        zscore_last: pred?.z_score_actuel ?? 0,
         ts_sample:  node.timeseries?.points ?? [],
         hourly: (node.hourly ?? []).sort((a, b) => {
           const ha = parseInt(a.h)
@@ -142,14 +152,15 @@ function apiToSessions(api: ApiResponse): CIPSession[] {
         start:      startStr,
         end:        endStr,
         date:       dateStr,
-        nb_points:  stats.nb_points,
+        nb_points:  stats?.nb_points ?? 0,
         color:      col.color,
         colorLight: col.light,
         colorDark:  col.dark,
-        nb_anomalies: node.isolation_forest.nb_anomalies_historiques,
-        risk_level:   pred.risk_level,
-        risk_score:   pred.risk_score,
-        interpretation: api.global.interpretation,
+        nb_anomalies: node.isolation_forest?.nb_anomalies_historiques ?? 0,
+        risk_level:   pred?.risk_level ?? 'NORMAL',
+        risk_score:   pred?.risk_score ?? 0,
+        interpretation: api.global?.interpretation ?? '',
+        fail_rate:    stats?.fail_rate_moyen ?? 0,
       }
     })
 }
@@ -157,8 +168,8 @@ function apiToSessions(api: ApiResponse): CIPSession[] {
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 function getTrendLabel(pct: number) {
-  if (pct >= 0)   return { icon: <TrendingUp size={20} />,   label: 'Hausse',            color: '#3B6D11' }
-  if (pct > -20)  return { icon: <TrendingDown size={20} />, label: 'Légère baisse',     color: '#854F0B' }
+  if (pct >= 0)   return { icon: <TrendingUp  size={20} />, label: 'Hausse',            color: '#3B6D11' }
+  if (pct > -20)  return { icon: <TrendingDown size={20} />, label: 'Légère baisse',    color: '#854F0B' }
   return               { icon: <TrendingDown size={20} />, label: 'Descente nocturne', color: '#A32D2D' }
 }
 
@@ -179,7 +190,7 @@ function getRiskStyle(level: string) {
 
 function GlobalKpiBar({ sessions, isDark }: { sessions: CIPSession[]; isDark?: boolean }) {
   const totalReq  = sessions.reduce((s, d) => s + d.total, 0)
-  const globalMax = Math.max(...sessions.map(d => d.max))
+  const globalMax = sessions.length > 0 ? Math.max(...sessions.map(d => d.max)) : 0
   const totalAnom = sessions.reduce((s, d) => s + d.nb_anomalies, 0)
   const worstRisk = sessions.length > 0 ? sessions.reduce((a, b) => a.risk_score > b.risk_score ? a : b) : null
 
@@ -188,11 +199,11 @@ function GlobalKpiBar({ sessions, isDark }: { sessions: CIPSession[]; isDark?: b
   const tSec   = isDark ? '#94a3b8' : '#64748b'
 
   const kpis = [
-    { label: 'Nœud supervisé',     value: 'SDP-Node-01',                            sub: 'ttsdp17a · CIP Diameter',          accent: '#185FA5' },
-    { label: 'Sessions analysées', value: sessions.length.toString(),                sub: '4 fichiers CSV · 17-18 fév. 2026', accent: '#534AB7' },
-    { label: 'Total requêtes',     value: (totalReq / 1_000_000).toFixed(1) + ' M', sub: 'Toutes sessions cumulées',         accent: '#0F6E56' },
-    { label: 'Anomalies IsoForest',value: String(totalAnom),                         sub: `Risque : ${worstRisk ? getRiskStyle(worstRisk.risk_level).label : '—'}`, accent: totalAnom > 100 ? '#A32D2D' : '#854F0B' },
-    { label: 'Pic global',         value: globalMax.toLocaleString() + ' /s',        sub: 'Pic maximum observé',              accent: '#854F0B' },
+    { label: 'Nœuds supervisés',   value: String(sessions.length),                   sub: 'SDP · AIR · OCC · CCN · VS · AF',  accent: '#185FA5' },
+    { label: 'Sessions analysées', value: String(sessions.length),                   sub: 'Logs live VM1 · toutes les 2 min',  accent: '#534AB7' },
+    { label: 'Total requêtes',     value: (totalReq / 1_000_000).toFixed(1) + ' M',  sub: 'Toutes sessions cumulées',          accent: '#0F6E56' },
+    { label: 'Anomalies IsoForest',value: String(totalAnom),                          sub: `Risque max : ${worstRisk ? getRiskStyle(worstRisk.risk_level).label : '—'}`, accent: totalAnom > 20 ? '#A32D2D' : '#854F0B' },
+    { label: 'Pic global',         value: globalMax > 0 ? globalMax.toLocaleString() + ' /s' : '—', sub: 'Pic maximum observé', accent: '#854F0B' },
   ]
 
   return (
@@ -223,6 +234,7 @@ function SessionCard({ session, isDark }: { session: CIPSession; isDark?: boolea
   const chartData = session.ts_sample.map(p => ({ t: p.t, success: p.s, avg: session.avg }))
   const fillId    = `fill-${session.key}`
   const maxH      = session.hourly.length > 0 ? Math.max(...session.hourly.map(h => h.avg)) : 1
+  const failPct   = session.fail_rate * 100
 
   return (
     <div style={{ background: cardBg, border: `0.5px solid ${border}`, borderTop: `3px solid ${session.color}`, borderRadius: '14px', overflow: 'hidden' }}>
@@ -241,15 +253,15 @@ function SessionCard({ session, isDark }: { session: CIPSession; isDark?: boolea
               </span>
             </div>
             <p style={{ fontSize: '11px', color: textSec, margin: '3px 0 0' }}>
-              Fichier source : <span style={{ fontFamily: 'monospace', color: session.color }}>{session.filename}</span>
-              {' · '}{session.nb_points.toLocaleString()} mesures (intervalle 10 s)
+              Source : <span style={{ fontFamily: 'monospace', color: session.color }}>{session.filename}</span>
+              {' · '}{session.nb_points.toLocaleString()} mesures
             </p>
           </div>
         </div>
         <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-          <span style={{ fontSize: '11px', fontWeight: 600, padding: '4px 10px', borderRadius: '20px', background: '#EAF3DE', color: '#27500A' }}>
+          <span style={{ fontSize: '11px', fontWeight: 600, padding: '4px 10px', borderRadius: '20px', background: failPct < 1 ? '#EAF3DE' : '#FAEEDA', color: failPct < 1 ? '#27500A' : '#854F0B' }}>
             <CheckCircle2 size={11} style={{ marginRight: '4px', verticalAlign: '-1px' }} />
-            Nominal
+            Fail : {failPct.toFixed(2)} %
           </span>
           <span style={{ fontSize: '11px', fontWeight: 600, padding: '4px 10px', borderRadius: '20px', background: zStat.bg, color: zStat.color }}>
             Z = {session.zscore_last.toFixed(3)} · {zStat.label}
@@ -296,7 +308,7 @@ function SessionCard({ session, isDark }: { session: CIPSession; isDark?: boolea
               <Activity size={13} color={session.color} />
               <p style={{ fontSize: '10px', color: textSec, textTransform: 'uppercase', letterSpacing: '0.06em', margin: 0, fontWeight: 500 }}>Agrégation horaire</p>
             </div>
-            {session.hourly.map(h => {
+            {session.hourly.length > 0 ? session.hourly.map(h => {
               const pct = Math.round((h.avg / maxH) * 100)
               return (
                 <div key={h.h} style={{ marginBottom: '6px' }}>
@@ -309,17 +321,19 @@ function SessionCard({ session, isDark }: { session: CIPSession; isDark?: boolea
                   </div>
                 </div>
               )
-            })}
+            }) : <p style={{ fontSize: '11px', color: textSec }}>Données en cours de collecte…</p>}
           </div>
 
           {/* Fail/Reject */}
-          <div style={{ background: '#EAF3DE', borderRadius: '8px', padding: '10px 12px', border: '0.5px solid rgba(59,109,17,0.2)' }}>
+          <div style={{ background: failPct < 1 ? '#EAF3DE' : '#FAEEDA', borderRadius: '8px', padding: '10px 12px', border: `0.5px solid ${failPct < 1 ? 'rgba(59,109,17,0.2)' : 'rgba(133,79,11,0.2)'}` }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-              <CheckCircle2 size={14} color='#27500A' />
-              <p style={{ fontSize: '12px', fontWeight: 600, color: '#27500A', margin: 0 }}>0 Fail · 0 Reject</p>
+              <CheckCircle2 size={14} color={failPct < 1 ? '#27500A' : '#854F0B'} />
+              <p style={{ fontSize: '12px', fontWeight: 600, color: failPct < 1 ? '#27500A' : '#854F0B', margin: 0 }}>
+                Fail rate : {failPct.toFixed(3)} %
+              </p>
             </div>
-            <p style={{ fontSize: '11px', color: '#3B6D11', margin: '4px 0 0', paddingLeft: '20px' }}>
-              Interface CIP Diameter nominale sur toute la fenêtre
+            <p style={{ fontSize: '11px', color: failPct < 1 ? '#3B6D11' : '#854F0B', margin: '4px 0 0', paddingLeft: '20px' }}>
+              {failPct < 1 ? 'Interface nominale sur toute la fenêtre' : 'Dégradation détectée — surveiller'}
             </p>
           </div>
         </div>
@@ -329,38 +343,44 @@ function SessionCard({ session, isDark }: { session: CIPSession; isDark?: boolea
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '14px' }}>
             <BarChart3 size={14} color={session.color} />
             <p style={{ fontSize: '11px', fontWeight: 600, color: textSec, textTransform: 'uppercase', letterSpacing: '0.06em', margin: 0 }}>
-              Débit Success CIP Diameter · {session.label} · {session.avg.toLocaleString()} /s moy. (pointillé)
+              Débit · {session.label} · {session.avg.toLocaleString()} /s moy. (pointillé)
             </p>
           </div>
 
           <div style={{ height: '220px' }}>
-            <ResponsiveContainer width="100%" height="100%">
-              <AreaChart data={chartData} margin={{ top: 4, right: 8, bottom: 0, left: 0 }}>
-                <defs>
-                  <linearGradient id={fillId} x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%" stopColor={session.color} stopOpacity={0.25} />
-                    <stop offset="100%" stopColor={session.color} stopOpacity={0} />
-                  </linearGradient>
-                </defs>
-                <CartesianGrid strokeDasharray="3 3" stroke={isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.06)'} vertical={false} />
-                <XAxis dataKey="t" tick={{ fill: textSec, fontSize: 10 }} axisLine={{ stroke: isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)' }} tickLine={false} interval="preserveStartEnd" />
-                <YAxis tick={{ fill: textSec, fontSize: 10 }} axisLine={false} tickLine={false} tickFormatter={v => Math.round(v / 1000) + 'k'} domain={[Math.round(session.min * 0.9), Math.round(session.max * 1.05)]} width={36} />
-                <Tooltip
-                  contentStyle={{ background: isDark ? '#0f172a' : '#fff', border: `0.5px solid ${border}`, borderRadius: '8px', fontSize: '12px', color: textPri }}
-                  formatter={(value: number, name: string) => [value.toLocaleString() + ' /s', name === 'success' ? 'Success' : 'Moyenne']}
-                  labelStyle={{ color: textSec, fontSize: '11px' }}
-                />
-                <Area type="monotone" dataKey="avg" stroke={session.color} strokeWidth={1} strokeDasharray="4 3" fill="none" dot={false} activeDot={false} />
-                <Area type="monotone" dataKey="success" stroke={session.color} strokeWidth={2} fill={`url(#${fillId})`} dot={false} activeDot={{ r: 4, fill: session.color, stroke: isDark ? '#0f172a' : '#fff', strokeWidth: 2 }} />
-              </AreaChart>
-            </ResponsiveContainer>
+            {session.ts_sample.length > 0 ? (
+              <ResponsiveContainer width="100%" height="100%">
+                <AreaChart data={chartData} margin={{ top: 4, right: 8, bottom: 0, left: 0 }}>
+                  <defs>
+                    <linearGradient id={fillId} x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="0%" stopColor={session.color} stopOpacity={0.25} />
+                      <stop offset="100%" stopColor={session.color} stopOpacity={0} />
+                    </linearGradient>
+                  </defs>
+                  <CartesianGrid strokeDasharray="3 3" stroke={isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.06)'} vertical={false} />
+                  <XAxis dataKey="t" tick={{ fill: textSec, fontSize: 10 }} axisLine={{ stroke: isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)' }} tickLine={false} interval="preserveStartEnd" />
+                  <YAxis tick={{ fill: textSec, fontSize: 10 }} axisLine={false} tickLine={false} tickFormatter={v => v >= 1000 ? Math.round(v / 1000) + 'k' : String(v)} domain={[Math.round((session.min || 0) * 0.9), Math.round((session.max || 100) * 1.05)]} width={36} />
+                  <Tooltip
+                    contentStyle={{ background: isDark ? '#0f172a' : '#fff', border: `0.5px solid ${border}`, borderRadius: '8px', fontSize: '12px', color: textPri }}
+                    formatter={(value: number, name: string) => [value.toLocaleString() + ' /s', name === 'success' ? 'Débit' : 'Moyenne']}
+                    labelStyle={{ color: textSec, fontSize: '11px' }}
+                  />
+                  <Area type="monotone" dataKey="avg" stroke={session.color} strokeWidth={1} strokeDasharray="4 3" fill="none" dot={false} activeDot={false} />
+                  <Area type="monotone" dataKey="success" stroke={session.color} strokeWidth={2} fill={`url(#${fillId})`} dot={false} activeDot={{ r: 4, fill: session.color, stroke: isDark ? '#0f172a' : '#fff', strokeWidth: 2 }} />
+                </AreaChart>
+              </ResponsiveContainer>
+            ) : (
+              <div style={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: textSec, fontSize: '13px' }}>
+                Données en cours de collecte…
+              </div>
+            )}
           </div>
 
           <div style={{ marginTop: '14px', paddingTop: '12px', borderTop: `0.5px solid ${border}`, display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '8px' }}>
             {[
               { label: 'Points analysés', value: session.nb_points.toLocaleString() },
               { label: 'Total Success',   value: (session.total / 1_000_000).toFixed(2) + ' M' },
-              { label: 'Plage horaire',   value: session.start + ' → ' + session.end },
+              { label: 'Plage horaire',   value: session.start ? `${session.start} → ${session.end}` : '—' },
               { label: 'Anomalies IF',    value: String(session.nb_anomalies) },
             ].map(({ label, value }) => (
               <div key={label}>
@@ -386,33 +406,34 @@ function InsightsPanel({ sessions, isDark }: { sessions: CIPSession[]; isDark?: 
   const worstTrend = sessions.length > 0 ? sessions.reduce((a, b) => a.trend_pct < b.trend_pct ? a : b) : null
   const totalAnom  = sessions.reduce((s, d) => s + d.nb_anomalies, 0)
   const interp     = sessions[0]?.interpretation ?? ''
+  const avgRisk    = sessions.length > 0 ? Math.round(sessions.reduce((s, d) => s + d.risk_score, 0) / sessions.length * 100) : 0
 
   const insights = [
     {
       color: '#3B6D11', bg: isDark ? '#173404' : '#EAF3DE',
       icon: <CheckCircle2 size={16} color='#3B6D11' />,
-      title: 'Disponibilité nominale',
-      body: `Taux de succès 100 % sur les 4 fenêtres de capture. Aucun Fail ni Reject enregistré. Le nœud SDP-Node-01 (ttsdp17a) est pleinement opérationnel sur l'ensemble de la période analysée.`,
+      title: 'Disponibilité globale',
+      body: `${sessions.length} nœuds supervisés en temps réel (SDP, AIR, OCC, CCN, VS, AF). Données synchronisées depuis VM1 toutes les 2 minutes via rsync. Débit moyen global : ${globalAvg.toLocaleString()} /s.`,
     },
     {
       color: '#854F0B', bg: isDark ? '#412402' : '#FAEEDA',
       icon: <Activity size={16} color='#854F0B' />,
-      title: 'Pattern de décroissance nocturne',
+      title: 'Tendances détectées',
       body: worstTrend
-        ? `Toutes les sessions montrent une décroissance progressive du trafic CIP Diameter en soirée. La ${worstTrend.label} présente la baisse la plus marquée (${worstTrend.trend_pct.toFixed(1)} %). Comportement cyclique attendu.`
-        : 'Analyse des tendances en cours.',
+        ? `Le nœud ${worstTrend.label} présente la tendance la plus marquée (${worstTrend.trend_pct.toFixed(1)} %). Comportement analysé sur la dernière heure de collecte.`
+        : 'Analyse des tendances en cours sur la fenêtre glissante.',
     },
     {
       color: '#185FA5', bg: isDark ? '#042C53' : '#E6F1FB',
       icon: <BarChart3 size={16} color='#185FA5' />,
       title: 'Isolation Forest — résultats',
-      body: `${totalAnom} anomalies détectées sur les 4 sessions (contamination 5%). Débit moyen global : ${globalAvg.toLocaleString()} /s. Les variations détectées correspondent à des fluctuations de charge normales — aucune dégradation de service.`,
+      body: `${totalAnom} anomalies détectées sur les ${sessions.length} nœuds (contamination 5%). Les variations correspondent à des fluctuations de charge — aucune dégradation critique détectée.`,
     },
     {
       color: '#534AB7', bg: isDark ? '#26215C' : '#EEEDFE',
       icon: <Info size={16} color='#534AB7' />,
       title: 'Prédiction court terme',
-      body: interp || `Sur la base du pattern observé, la remontée du trafic est attendue après 06h. Le pic devrait se situer entre 19h et 21h lors de la prochaine fenêtre de collecte.`,
+      body: interp || `Risque moyen : ${avgRisk}/100. Sur la base des patterns observés, le trafic est stable. Les modèles sont recalculés à chaque actualisation.`,
     },
   ]
 
@@ -423,7 +444,7 @@ function InsightsPanel({ sessions, isDark }: { sessions: CIPSession[]; isDark?: 
           <AlertCircle size={15} color='#534AB7' />
         </div>
         <h3 style={{ fontSize: '14px', fontWeight: 700, color: textPri, margin: 0 }}>
-          Analyse prédictive — SDP-Node-01 (ttsdp17a) · Isolation Forest
+          Analyse prédictive — 6 nœuds ECS · Isolation Forest · Logs live VM1
         </h3>
       </div>
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
@@ -494,7 +515,7 @@ export default function PredictionPage() {
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: 'calc(100vh - 64px)', background: bgPage }}>
         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '16px' }}>
           <div style={{ width: '44px', height: '44px', border: '3px solid rgba(83,74,183,0.2)', borderTop: '3px solid #534AB7', borderRadius: '50%', animation: 'spin 1s linear infinite' }} />
-          <p style={{ color: textSec, fontSize: '14px' }}>Chargement des statistiques CIP Diameter…</p>
+          <p style={{ color: textSec, fontSize: '14px' }}>Chargement des statistiques — 6 nœuds ECS…</p>
         </div>
       </div>
       <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
@@ -533,18 +554,18 @@ export default function PredictionPage() {
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '12px' }}>
             <div>
               <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                <h1 style={{ fontSize: '22px', fontWeight: 700, color: textPri, margin: 0 }}>Prédiction & Analyse CIP Diameter</h1>
+                <h1 style={{ fontSize: '22px', fontWeight: 700, color: textPri, margin: 0 }}>Prédiction & Analyse — Nœuds ECS</h1>
                 <span style={{ fontSize: '11px', fontWeight: 600, padding: '3px 10px', borderRadius: '20px', background: '#EEEDFE', color: '#3C3489' }}>Isolation Forest</span>
               </div>
               <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginTop: '6px' }}>
                 <Server size={13} color='#185FA5' />
-                <span style={{ fontSize: '13px', color: '#185FA5', fontWeight: 600 }}>SDP-Node-01 (ttsdp17a)</span>
+                <span style={{ fontSize: '13px', color: '#185FA5', fontWeight: 600 }}>6 nœuds · SDP · AIR · OCC · CCN · VS · AF</span>
                 <span style={{ fontSize: '13px', color: textSec }}>·</span>
-                <span style={{ fontSize: '13px', color: textSec }}>PSC-CIPDiameter · 4 fenêtres de capture · 17–18 fév. 2026</span>
+                <span style={{ fontSize: '13px', color: textSec }}>Logs live VM1 · fenêtre 60 min</span>
               </div>
             </div>
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-              {lastUpdate && <span style={{ fontSize: '11px', color: textSec }}>Mis à jour : {lastUpdate}</span>}
+              {lastUpdate && <span style={{ fontSize: '11px', color: textSec }}>Mis à jour : {new Date(lastUpdate).toLocaleTimeString('fr-FR')}</span>}
               <button onClick={() => loadData(true)} disabled={isRefreshing} style={{ display: 'flex', alignItems: 'center', gap: '6px', background: 'none', border: `0.5px solid ${border}`, borderRadius: '8px', padding: '7px 14px', fontSize: '13px', color: textPri, cursor: 'pointer', opacity: isRefreshing ? 0.6 : 1 }}>
                 <RefreshCw size={14} style={{ animation: isRefreshing ? 'spin 1s linear infinite' : 'none' }} />
                 {isRefreshing ? 'Actualisation…' : 'Actualiser'}
@@ -557,13 +578,13 @@ export default function PredictionPage() {
 
         <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
           <button onClick={() => setActiveTab('all')} style={{ padding: '7px 16px', borderRadius: '8px', fontSize: '13px', cursor: 'pointer', fontWeight: activeTab === 'all' ? 600 : 400, border: activeTab === 'all' ? '1.5px solid #534AB7' : `0.5px solid ${border}`, background: activeTab === 'all' ? '#534AB7' : 'transparent', color: activeTab === 'all' ? '#fff' : textSec }}>
-            Toutes les sessions
+            Tous les nœuds
           </button>
           {sessions.map(s => (
             <button key={s.key} onClick={() => setActiveTab(s.key)} style={{ padding: '7px 16px', borderRadius: '8px', fontSize: '13px', cursor: 'pointer', fontWeight: activeTab === s.key ? 600 : 400, border: activeTab === s.key ? `1.5px solid ${s.color}` : `0.5px solid ${border}`, background: activeTab === s.key ? s.color : 'transparent', color: activeTab === s.key ? '#fff' : textSec, display: 'flex', alignItems: 'center', gap: '6px' }}>
               <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: activeTab === s.key ? '#ffffff88' : s.color, display: 'inline-block' }} />
-              {s.label}
-              <span style={{ fontSize: '10px', opacity: 0.75 }}>{s.start}→{s.end}</span>
+              {s.key}
+              {s.start && <span style={{ fontSize: '10px', opacity: 0.75 }}>{s.start}→{s.end}</span>}
             </button>
           ))}
         </div>
@@ -572,7 +593,7 @@ export default function PredictionPage() {
           {filtered.map(s => <SessionCard key={s.key} session={s} isDark={isDark} />)}
         </div>
 
-        {activeTab === 'all' && <InsightsPanel sessions={sessions} isDark={isDark} />}
+        {activeTab === 'all' && sessions.length > 0 && <InsightsPanel sessions={sessions} isDark={isDark} />}
       </div>
 
       <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>

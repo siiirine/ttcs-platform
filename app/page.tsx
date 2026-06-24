@@ -12,14 +12,18 @@ import {
   TrendingUp, Shield, Radio, BarChart2, Clock, ArrowRight
 } from 'lucide-react'
 
-// ─────────────────────────────────────────────────────────────
-// Types
-// ─────────────────────────────────────────────────────────────
 interface NodeStatus {
   status: 'NORMAL' | 'WARNING' | 'CRITICAL' | 'UNKNOWN'
   display_name?: string
   role?: string
-  hw?: { cpu_pct?: number; memory_pct?: number; disk_pct?: number; status?: string }
+  hw?: {
+    cpu_pct?: number
+    ram_pct?: number       // ← nom réel dans l'API
+    memory_pct?: number    // ← alias normalisé
+    disk_pct?: number
+    status?: string
+    [key: string]: unknown
+  }
   [key: string]: unknown
 }
 interface Summary { total: number; critical: number; warning: number; normal: number }
@@ -35,6 +39,14 @@ function getCookie(name: string): string {
   if (typeof document === 'undefined') return ''
   const m = document.cookie.match(new RegExp('(^| )' + name + '=([^;]+)'))
   return m ? decodeURIComponent(m[2]) : ''
+}
+
+// ── Helpers pour lire CPU et RAM depuis n'importe quel format API ──
+function getCpu(hw: any): number {
+  return hw?.cpu_pct ?? hw?.cpu ?? 0
+}
+function getRam(hw: any): number {
+  return hw?.ram_pct ?? hw?.memory_pct ?? hw?.mem_pct ?? hw?.ram ?? hw?.memory ?? 0
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -112,9 +124,6 @@ function StatusDot({ status }: { status: string }) {
   )
 }
 
-// ─────────────────────────────────────────────────────────────
-// Role badge colors — stables dans les deux modes
-// ─────────────────────────────────────────────────────────────
 const ROLE_STYLE: Record<string, { bg: string; text: string }> = {
   CCN: { bg: 'rgba(24,95,165,0.15)',  text: '#185FA5' },
   AIR: { bg: 'rgba(15,110,86,0.15)',  text: '#0F6E56' },
@@ -137,7 +146,7 @@ export default function DashboardPage() {
   const [lastUpdate,   setLastUpdate]   = useState<Date | null>(null)
   const router = useRouter()
   const { t }  = useLang()
-  const c      = useThemeColors()   // ← toutes les couleurs viennent d'ici
+  const c      = useThemeColors()
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
   const BASE = 'http://192.168.147.129:8000'
@@ -152,8 +161,8 @@ export default function DashboardPage() {
         fetch(`${BASE}/anomalies`,   { headers: hdrs() }).then(r => r.json()),
         fetch(`${BASE}/correlation`, { headers: hdrs() }).then(r => r.json()),
       ])
-      // ── /summary : peut être { total, critical, warning, normal }
-      //              ou { nodes: 6, critical: 0, ... } selon version API
+
+      // ── Summary ──
       const sumNorm: Summary = {
         total:    sumR?.total    ?? sumR?.nodes ?? 0,
         critical: sumR?.critical ?? 0,
@@ -162,35 +171,30 @@ export default function DashboardPage() {
       }
       setSummary(sumNorm)
 
-      // ── /status : retourne { timestamp, nodes: { jambala: {...} } }
-      //             ou directement { jambala: {...} }
+      // ── Status : extraire les nœuds ──
       const rawStatus = statR ?? {}
       const SKIP_KEYS = ['timestamp', 'generated_at', 'total', 'critical', 'warning', 'normal']
       const rawNodes: Record<string, any> = rawStatus.nodes
         ? rawStatus.nodes
         : Object.fromEntries(Object.entries(rawStatus).filter(([k]) => !SKIP_KEYS.includes(k)))
 
-      // Normaliser chaque nœud : global_status → status, hw.cpu_pct / hw.memory_pct
+      // Normaliser chaque nœud — on garde le hw ORIGINAL intact
+      // pour que getCpu() et getRam() accèdent aux vrais noms de champs
       const normalized: Record<string, NodeStatus> = {}
       for (const [name, raw] of Object.entries(rawNodes)) {
         const n = raw as any
         normalized[name] = {
           ...n,
-          // L'API utilise global_status, on le mappe vers status
-          status: n.status ?? n.global_status ?? 'UNKNOWN',
+          status:       n.status ?? n.global_status ?? 'UNKNOWN',
           display_name: n.display_name ?? name,
-          role: n.role ?? '—',
-          hw: {
-            cpu_pct:    n.hw?.cpu_pct    ?? n.hw?.cpu   ?? 0,
-            memory_pct: n.hw?.memory_pct ?? n.hw?.ram   ?? n.hw?.mem_pct ?? 0,
-            disk_pct:   n.hw?.disk_pct   ?? n.hw?.disk  ?? 0,
-            status:     n.hw?.status     ?? n.global_status ?? 'UNKNOWN',
-          },
+          role:         n.role ?? '—',
+          // On conserve hw tel quel — getCpu/getRam gèrent tous les formats
+          hw: n.hw ?? {},
         }
       }
       setStatuses(normalized)
 
-      // Recalculer summary depuis les nœuds si summary API retourne 0
+      // Recalculer summary si total = 0
       if (sumNorm.total === 0 && Object.keys(normalized).length > 0) {
         const vals = Object.values(normalized)
         setSummary({
@@ -221,13 +225,11 @@ export default function DashboardPage() {
   const critAnomalies = anomalies.filter(a => a.severity === 'CRITICAL' || a.impact_level === 'CRITIQUE')
   const warnAnomalies = anomalies.filter(a => a.severity === 'WARNING'  || a.impact_level === 'ÉLEVÉ')
 
-  // Couleur accent fixe (reste visible dans les 2 modes)
-  const accent    = '#185FA5'
-  const trackBg   = c.border   // piste des barres = couleur de bord du thème
-  const panelBg   = c.panelBg  ?? c.cardBg
-  const rowHover  = c.rowHover ?? panelBg
+  const accent   = '#185FA5'
+  const trackBg  = c.border
+  const panelBg  = c.panelBg  ?? c.cardBg
+  const rowHover = c.rowHover ?? panelBg
 
-  // ── Loading ──
   if (isLoading) return (
     <DashboardLayout><Topbar />
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: 'calc(100vh - 64px)' }}>
@@ -255,23 +257,15 @@ export default function DashboardPage() {
               padding: '4px 10px', borderRadius: '20px',
               background: 'rgba(34,197,94,0.1)', border: '1px solid rgba(34,197,94,0.25)'
             }}>
-              <span style={{
-                width: '6px', height: '6px', borderRadius: '50%', background: '#22c55e',
-                boxShadow: '0 0 6px rgba(34,197,94,0.7)',
-                animation: 'ttcs-pulse 2s ease-in-out infinite'
-              }}/>
+              <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: '#22c55e',
+                boxShadow: '0 0 6px rgba(34,197,94,0.7)', animation: 'ttcs-pulse 2s ease-in-out infinite' }}/>
               <span style={{ fontSize: '10px', fontWeight: 700, color: '#22c55e', letterSpacing: '0.08em' }}>
                 SYSTÈME ACTIF
               </span>
             </div>
-            <h1 style={{ fontSize: '18px', fontWeight: 800, color: c.textPrimary }}>
-              Tableau de bord
-            </h1>
-            <span style={{
-              fontSize: '11px', color: c.textSecondary,
-              background: panelBg, border: `1px solid ${c.border}`,
-              padding: '2px 8px', borderRadius: '6px'
-            }}>
+            <h1 style={{ fontSize: '18px', fontWeight: 800, color: c.textPrimary }}>Tableau de bord</h1>
+            <span style={{ fontSize: '11px', color: c.textSecondary,
+              background: panelBg, border: `1px solid ${c.border}`, padding: '2px 8px', borderRadius: '6px' }}>
               ECS Ericsson · Tunisie Telecom
             </span>
           </div>
@@ -282,17 +276,11 @@ export default function DashboardPage() {
                 <span>Mis à jour {lastUpdate.toLocaleTimeString('fr-FR')}</span>
               </div>
             )}
-            <button
-              onClick={() => fetchAll(true)}
-              disabled={isRefreshing}
-              style={{
-                display: 'flex', alignItems: 'center', gap: '6px',
-                padding: '7px 14px', borderRadius: '8px',
-                background: c.cardBg, border: `1px solid ${c.border}`,
-                color: c.textPrimary, fontSize: '12px', fontWeight: 600,
-                cursor: 'pointer', opacity: isRefreshing ? 0.6 : 1
-              }}
-            >
+            <button onClick={() => fetchAll(true)} disabled={isRefreshing} style={{
+              display: 'flex', alignItems: 'center', gap: '6px', padding: '7px 14px', borderRadius: '8px',
+              background: c.cardBg, border: `1px solid ${c.border}`, color: c.textPrimary,
+              fontSize: '12px', fontWeight: 600, cursor: 'pointer', opacity: isRefreshing ? 0.6 : 1
+            }}>
               <RefreshCw size={13} style={{ animation: isRefreshing ? 'ttcs-spin 0.8s linear infinite' : 'none' }}/>
               Actualiser
             </button>
@@ -301,46 +289,37 @@ export default function DashboardPage() {
 
         {/* ══ ROW 1 : Health Score + 4 KPI ══ */}
         <div style={{ display: 'grid', gridTemplateColumns: '180px 1fr 1fr 1fr 1fr', gap: '12px' }}>
-
-          {/* Health Score */}
           <div style={{
-            background: c.cardBg, border: `1px solid ${c.border}`,
-            borderRadius: '14px', padding: '18px', boxShadow: c.shadow,
+            background: c.cardBg, border: `1px solid ${c.border}`, borderRadius: '14px',
+            padding: '18px', boxShadow: c.shadow,
             display: 'flex', flexDirection: 'column', alignItems: 'center',
             justifyContent: 'center', gap: '6px', position: 'relative', overflow: 'hidden'
           }}>
-            <div style={{
-              position: 'absolute', top: 0, left: 0, right: 0, height: '3px',
+            <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: '3px',
               background: healthScore >= 80 ? '#22c55e' : healthScore >= 50 ? '#f59e0b' : '#ef4444',
-              borderRadius: '14px 14px 0 0'
-            }}/>
+              borderRadius: '14px 14px 0 0' }}/>
             <span style={{ fontSize: '9px', fontWeight: 700, color: c.textSecondary,
-              textTransform: 'uppercase', letterSpacing: '0.1em' }}>
-              Health Score
-            </span>
+              textTransform: 'uppercase', letterSpacing: '0.1em' }}>Health Score</span>
             <HealthDonut
               pct={healthScore}
               color={healthScore >= 80 ? '#22c55e' : healthScore >= 50 ? '#f59e0b' : '#ef4444'}
               trackColor={c.border}
             />
-            <span style={{
-              fontSize: '10px', fontWeight: 700,
-              color: healthScore >= 80 ? '#22c55e' : healthScore >= 50 ? '#f59e0b' : '#ef4444'
-            }}>
+            <span style={{ fontSize: '10px', fontWeight: 700,
+              color: healthScore >= 80 ? '#22c55e' : healthScore >= 50 ? '#f59e0b' : '#ef4444' }}>
               {healthScore >= 80 ? 'Sain' : healthScore >= 50 ? 'Dégradé' : 'Critique'}
             </span>
           </div>
 
-          {/* 4 KPI */}
           {[
-            { label: 'Total nœuds',    value: summary?.total    ?? 0, color: accent,    icon: Server,       trend: 'flat' as const, sub: 'supervisés'            },
-            { label: 'Critiques',      value: summary?.critical ?? 0, color: '#ef4444', icon: AlertCircle,  trend: (summary?.critical ?? 0) > 0 ? 'down' as const : 'flat' as const, sub: (summary?.critical ?? 0) > 0 ? 'nœud(s) en alerte' : 'Aucune alerte' },
-            { label: 'Avertissements', value: summary?.warning  ?? 0, color: '#f59e0b', icon: AlertTriangle, trend: (summary?.warning ?? 0) > 0 ? 'down' as const : 'flat' as const, sub: (summary?.warning ?? 0) > 0 ? 'nœud(s) en warning' : 'Aucun avertissement' },
-            { label: 'Normaux',        value: summary?.normal   ?? 0, color: '#22c55e', icon: CheckCircle2, trend: 'up' as const, sub: 'opérationnels'           },
+            { label: 'Total nœuds',    value: summary?.total    ?? 0, color: accent,    icon: Server,        trend: 'flat' as const, sub: 'supervisés' },
+            { label: 'Critiques',      value: summary?.critical ?? 0, color: '#ef4444', icon: AlertCircle,   trend: (summary?.critical ?? 0) > 0 ? 'down' as const : 'flat' as const, sub: (summary?.critical ?? 0) > 0 ? 'nœud(s) en alerte' : 'Aucune alerte' },
+            { label: 'Avertissements', value: summary?.warning  ?? 0, color: '#f59e0b', icon: AlertTriangle, trend: (summary?.warning ?? 0) > 0 ? 'down' as const : 'flat' as const,  sub: (summary?.warning ?? 0) > 0 ? 'nœud(s) en warning' : 'Aucun avertissement' },
+            { label: 'Normaux',        value: summary?.normal   ?? 0, color: '#22c55e', icon: CheckCircle2,  trend: 'up' as const, sub: 'opérationnels' },
           ].map(({ label, value, color, icon: Icon, trend, sub }) => (
             <div key={label} style={{
-              background: c.cardBg, border: `1px solid ${c.border}`,
-              borderRadius: '14px', padding: '18px 20px', boxShadow: c.shadow,
+              background: c.cardBg, border: `1px solid ${c.border}`, borderRadius: '14px',
+              padding: '18px 20px', boxShadow: c.shadow,
               display: 'flex', flexDirection: 'column', gap: '10px',
               position: 'relative', overflow: 'hidden'
             }}>
@@ -348,18 +327,13 @@ export default function DashboardPage() {
                 background: color, borderRadius: '14px 14px 0 0' }}/>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <span style={{ fontSize: '10px', fontWeight: 700, color: c.textSecondary,
-                  textTransform: 'uppercase', letterSpacing: '0.08em' }}>
-                  {label}
-                </span>
-                <div style={{ padding: '6px', borderRadius: '8px',
-                  background: `${color}18`, border: `1px solid ${color}30` }}>
+                  textTransform: 'uppercase', letterSpacing: '0.08em' }}>{label}</span>
+                <div style={{ padding: '6px', borderRadius: '8px', background: `${color}18`, border: `1px solid ${color}30` }}>
                   <Icon size={13} style={{ color }}/>
                 </div>
               </div>
               <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: '8px' }}>
-                <span style={{ fontSize: '38px', fontWeight: 800, color, lineHeight: 1 }}>
-                  {value}
-                </span>
+                <span style={{ fontSize: '38px', fontWeight: 800, color, lineHeight: 1 }}>{value}</span>
                 <Sparkline color={color} trend={trend}/>
               </div>
               <span style={{ fontSize: '11px', color: c.textSecondary }}>
@@ -370,10 +344,8 @@ export default function DashboardPage() {
         </div>
 
         {/* ══ ROW 2 : Nœuds ══ */}
-        <div style={{
-          background: c.cardBg, border: `1px solid ${c.border}`,
-          borderRadius: '14px', padding: '16px 18px', boxShadow: c.shadow
-        }}>
+        <div style={{ background: c.cardBg, border: `1px solid ${c.border}`,
+          borderRadius: '14px', padding: '16px 18px', boxShadow: c.shadow }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '14px' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
               <div style={{ padding: '6px', borderRadius: '7px', background: `${accent}18` }}>
@@ -405,14 +377,13 @@ export default function DashboardPage() {
               : nodes.map(([name, node]) => {
                   const s   = node.status ?? 'UNKNOWN'
                   const rs  = ROLE_STYLE[node.role ?? ''] ?? ROLE_STYLE['CCN']
-                  const cpu = (node.hw as any)?.cpu_pct ?? 0
-                  const mem = (node.hw as any)?.memory_pct ?? 0
+                  // ✅ Utilise getCpu/getRam qui gèrent tous les noms de champs
+                  const cpu = getCpu(node.hw)
+                  const mem = getRam(node.hw)
                   const sc  = s === 'CRITICAL' ? '#ef4444' : s === 'WARNING' ? '#f59e0b' : s === 'NORMAL' ? '#22c55e' : '#9ca3af'
                   const dn  = node.display_name ?? name
                   return (
-                    <div
-                      key={name}
-                      onClick={() => router.push(`/noeuds/${name}`)}
+                    <div key={name} onClick={() => router.push(`/noeuds/${name}`)}
                       style={{
                         background: panelBg,
                         border: `1px solid ${s === 'CRITICAL' ? 'rgba(239,68,68,0.35)' : s === 'WARNING' ? 'rgba(245,158,11,0.3)' : c.border}`,
@@ -420,22 +391,12 @@ export default function DashboardPage() {
                         borderRadius: '10px', padding: '12px',
                         cursor: 'pointer', transition: 'all 0.2s'
                       }}
-                      onMouseEnter={e => {
-                        const el = e.currentTarget as HTMLElement
-                        el.style.transform = 'translateY(-2px)'
-                        el.style.boxShadow = c.shadowHover ?? c.shadow
-                      }}
-                      onMouseLeave={e => {
-                        const el = e.currentTarget as HTMLElement
-                        el.style.transform = 'translateY(0)'
-                        el.style.boxShadow = 'none'
-                      }}
+                      onMouseEnter={e => { const el = e.currentTarget as HTMLElement; el.style.transform = 'translateY(-2px)'; el.style.boxShadow = c.shadowHover ?? c.shadow }}
+                      onMouseLeave={e => { const el = e.currentTarget as HTMLElement; el.style.transform = 'translateY(0)'; el.style.boxShadow = 'none' }}
                     >
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '7px' }}>
-                        <span style={{
-                          fontSize: '9px', fontWeight: 700, padding: '2px 6px',
-                          borderRadius: '4px', background: rs.bg, color: rs.text
-                        }}>
+                        <span style={{ fontSize: '9px', fontWeight: 700, padding: '2px 6px',
+                          borderRadius: '4px', background: rs.bg, color: rs.text }}>
                           {node.role ?? '—'}
                         </span>
                         <StatusDot status={s}/>
@@ -466,11 +427,8 @@ export default function DashboardPage() {
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 320px', gap: '12px' }}>
 
           {/* Anomalies */}
-          <div style={{
-            background: c.cardBg, border: `1px solid ${c.border}`,
-            borderRadius: '14px', overflow: 'hidden', boxShadow: c.shadow,
-            display: 'flex', flexDirection: 'column'
-          }}>
+          <div style={{ background: c.cardBg, border: `1px solid ${c.border}`,
+            borderRadius: '14px', overflow: 'hidden', boxShadow: c.shadow, display: 'flex', flexDirection: 'column' }}>
             <div style={{ padding: '14px 18px', borderBottom: `1px solid ${c.border}`,
               display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
@@ -478,9 +436,7 @@ export default function DashboardPage() {
                   <Activity size={13} style={{ color: '#ef4444' }}/>
                 </div>
                 <span style={{ fontSize: '11px', fontWeight: 700, color: c.textSecondary,
-                  textTransform: 'uppercase', letterSpacing: '0.1em' }}>
-                  Anomalies récentes
-                </span>
+                  textTransform: 'uppercase', letterSpacing: '0.1em' }}>Anomalies récentes</span>
                 {anomalies.length > 0 && (
                   <span style={{ fontSize: '10px', fontWeight: 700, padding: '1px 7px',
                     borderRadius: '10px', background: 'rgba(239,68,68,0.1)',
@@ -504,23 +460,19 @@ export default function DashboardPage() {
                 )}
               </div>
             </div>
+
             <div style={{ flex: 1, overflowY: 'auto', maxHeight: '270px' }}>
               {anomalies.length === 0 ? (
                 <div style={{ padding: '14px 18px' }}>
-                  {/* Bannière compacte "tout va bien" */}
-                  <div style={{
-                    display: 'flex', alignItems: 'center', gap: '10px',
-                    padding: '10px 14px', borderRadius: '9px',
-                    background: 'rgba(34,197,94,0.08)', border: '1px solid rgba(34,197,94,0.2)',
-                    marginBottom: '12px'
-                  }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '10px 14px',
+                    borderRadius: '9px', background: 'rgba(34,197,94,0.08)',
+                    border: '1px solid rgba(34,197,94,0.2)', marginBottom: '12px' }}>
                     <CheckCircle2 size={16} style={{ color: '#22c55e', flexShrink: 0 }}/>
                     <div>
                       <p style={{ fontSize: '12px', fontWeight: 700, color: '#22c55e' }}>Aucune anomalie détectée</p>
                       <p style={{ fontSize: '10px', color: c.textSecondary }}>Tous les nœuds fonctionnent normalement</p>
                     </div>
                   </div>
-                  {/* Résumé compact par nœud */}
                   <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '6px' }}>
                     {nodes.slice(0, 6).map(([name, node]) => {
                       const s  = node.status ?? 'UNKNOWN'
@@ -528,12 +480,9 @@ export default function DashboardPage() {
                       const rs = ROLE_STYLE[node.role ?? ''] ?? ROLE_STYLE['CCN']
                       return (
                         <div key={name} onClick={() => router.push(`/noeuds/${name}`)}
-                          style={{
-                            padding: '8px 10px', borderRadius: '8px', cursor: 'pointer',
+                          style={{ padding: '8px 10px', borderRadius: '8px', cursor: 'pointer',
                             background: panelBg, border: `1px solid ${c.border}`,
-                            display: 'flex', alignItems: 'center', gap: '7px',
-                            transition: 'background 0.15s'
-                          }}
+                            display: 'flex', alignItems: 'center', gap: '7px', transition: 'background 0.15s' }}
                           onMouseEnter={e => (e.currentTarget as HTMLElement).style.background = rowHover}
                           onMouseLeave={e => (e.currentTarget as HTMLElement).style.background = panelBg}
                         >
@@ -668,10 +617,10 @@ export default function DashboardPage() {
               </div>
               <div style={{ padding: '6px' }}>
                 {[
-                  { label: 'Voir les nœuds', sub: 'État de tous les serveurs', path: '/noeuds',    color: accent,    icon: Server    },
-                  { label: 'Inventaire',      sub: 'Vue réseau & architecture', path: '/inventaire', color: '#a855f7', icon: BarChart2 },
-                  { label: 'Prédictions',     sub: 'Analyse prédictive SDP',    path: '/prediction', color: '#22c55e', icon: TrendingUp},
-                  { label: 'Assistant IA',    sub: 'Chatbot Groq LLaMA 3.3',   path: '/assistant',  color: '#f59e0b', icon: Zap       },
+                  { label: 'Voir les nœuds', sub: 'État de tous les serveurs', path: '/noeuds',     color: accent,    icon: Server     },
+                  { label: 'Inventaire',      sub: 'Vue réseau & architecture', path: '/inventaire', color: '#a855f7', icon: BarChart2  },
+                  { label: 'Prédictions',     sub: 'Analyse prédictive SDP',    path: '/prediction', color: '#22c55e', icon: TrendingUp },
+                  { label: 'Assistant IA',    sub: 'Chatbot Groq LLaMA 3.3',   path: '/assistant',  color: '#f59e0b', icon: Zap        },
                 ].map(({ label, sub, path, color, icon: Icon }) => (
                   <button key={path} onClick={() => router.push(path)}
                     style={{ width: '100%', display: 'flex', alignItems: 'center', gap: '10px',
@@ -700,11 +649,11 @@ export default function DashboardPage() {
           borderRadius: '10px', padding: '10px 18px', boxShadow: c.shadow,
           display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
           {[
-            { label: 'Total anomalies', value: anomalies.length,        alert: undefined },
-            { label: 'Critiques',       value: critAnomalies.length,    alert: critAnomalies.length > 0 ? '#ef4444' : undefined },
-            { label: 'Avertissements',  value: warnAnomalies.length,    alert: warnAnomalies.length > 0 ? '#f59e0b' : undefined },
+            { label: 'Total anomalies', value: anomalies.length,     alert: undefined },
+            { label: 'Critiques',       value: critAnomalies.length, alert: critAnomalies.length > 0 ? '#ef4444' : undefined },
+            { label: 'Avertissements',  value: warnAnomalies.length, alert: warnAnomalies.length > 0 ? '#f59e0b' : undefined },
             { label: 'Sources',         value: [...new Set(anomalies.map(a => a.node))].length, alert: undefined },
-            { label: 'Refresh',         value: '15s',                   alert: accent },
+            { label: 'Refresh',         value: '15s', alert: accent },
             { label: 'Mis à jour',      value: lastUpdate?.toLocaleString('fr-FR') ?? '—', alert: undefined },
           ].map(({ label, value, alert }, i, arr) => (
             <div key={label} style={{

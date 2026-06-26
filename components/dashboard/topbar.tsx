@@ -2,10 +2,12 @@
 
 import { usePathname, useRouter } from 'next/navigation'
 import Link from 'next/link'
-import { RefreshCw, Sun, Moon, User, LogOut, ChevronDown } from 'lucide-react'
+import { RefreshCw, Sun, Moon, User, LogOut, ChevronDown, FileDown } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { useTheme } from 'next-themes'
 import { useLang } from '@/lib/language-context'
+
+const API_BASE = 'http://192.168.147.129:8000'
 
 interface TopbarProps {
   onRefresh?: () => void
@@ -22,11 +24,12 @@ function getCookie(name: string): string {
 export function Topbar({ onRefresh, isRefreshing, lastUpdate }: TopbarProps) {
   const pathname = usePathname()
   const router   = useRouter()
-  const [mounted, setMounted]         = useState(false)
-  const { resolvedTheme, setTheme }   = useTheme()
-  const [user, setUser]               = useState<{ username: string; full_name: string; role: string } | null>(null)
-  const [avatar, setAvatar]           = useState<string | null>(null)
-  const [dropOpen, setDropOpen]       = useState(false)
+  const [mounted, setMounted]               = useState(false)
+  const { resolvedTheme, setTheme }         = useTheme()
+  const [user, setUser]                     = useState<{ username: string; full_name: string; role: string } | null>(null)
+  const [avatar, setAvatar]                 = useState<string | null>(null)
+  const [dropOpen, setDropOpen]             = useState(false)
+  const [isGeneratingReport, setIsGeneratingReport] = useState(false)
   const { t } = useLang()
 
   useEffect(() => {
@@ -63,6 +66,30 @@ export function Topbar({ onRefresh, isRefreshing, lastUpdate }: TopbarProps) {
     router.push('/login')
   }
 
+  const handleDailyReport = async () => {
+    setIsGeneratingReport(true)
+    try {
+      const token = getCookie('ttcs_token')
+      const res = await fetch(`${API_BASE}/report/daily`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` },
+      })
+      if (res.ok) {
+        const blob = await res.blob()
+        const url = window.URL.createObjectURL(blob)
+        const a = document.createElement('a')
+        a.href = url
+        a.download = `rapport_${new Date().toISOString().slice(0, 10)}.pdf`
+        a.click()
+        window.URL.revokeObjectURL(url)
+      }
+    } catch (err) {
+      console.error('Erreur génération rapport:', err)
+    } finally {
+      setIsGeneratingReport(false)
+    }
+  }
+
   const getTitle = () => {
     if (pathname.startsWith('/noeuds/')) return t('topbar', 'nodeDetail')
     if (pathname.startsWith('/admin'))   return t('topbar', 'administration')
@@ -97,13 +124,17 @@ export function Topbar({ onRefresh, isRefreshing, lastUpdate }: TopbarProps) {
     }}>
       <div style={{ display: 'flex', height: '100%', alignItems: 'center', justifyContent: 'space-between', padding: '0 24px' }}>
 
+        {/* ── Titre page ── */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
           <h1 suppressHydrationWarning style={{ fontFamily: 'var(--font-heading)', fontWeight: 700, fontSize: '20px', color: isDark ? '#e2e8f0' : '#0a1628' }}>
             {getTitle()}
           </h1>
         </div>
 
+        {/* ── Actions droite ── */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+
+          {/* Dernière mise à jour */}
           {lastUpdate && (
             <div suppressHydrationWarning style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '6px 12px', borderRadius: '8px', background: isDark ? 'rgba(0,130,240,0.08)' : 'rgba(0,130,240,0.05)', border: '1px solid rgba(0,130,240,0.12)', fontSize: '12px' }}>
               <span style={{ color: '#7a9bc5' }}>{t('topbar', 'updatedAt')}</span>
@@ -111,18 +142,54 @@ export function Topbar({ onRefresh, isRefreshing, lastUpdate }: TopbarProps) {
             </div>
           )}
 
+          {/* Toggle thème */}
           {mounted && (
             <button onClick={() => setTheme(isDark ? 'light' : 'dark')} title={isDark ? 'Mode clair' : 'Mode sombre'} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: '36px', height: '36px', borderRadius: '8px', border: 'none', background: isDark ? 'rgba(255,200,0,0.12)' : 'rgba(0,30,80,0.07)', color: isDark ? '#fbbf24' : '#1e3a5f', cursor: 'pointer', transition: 'all 0.2s ease' }}>
               {isDark ? <Sun size={17} /> : <Moon size={17} />}
             </button>
           )}
 
+          {/* Bouton Refresh */}
           {onRefresh && (
             <button onClick={onRefresh} disabled={isRefreshing} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: '36px', height: '36px', borderRadius: '8px', border: 'none', background: 'linear-gradient(135deg,#0055cc,#0082f0)', color: 'white', cursor: isRefreshing ? 'not-allowed' : 'pointer', opacity: isRefreshing ? 0.6 : 1, transition: 'all 0.2s' }} title="Actualiser">
               <RefreshCw size={15} style={{ animation: isRefreshing ? 'spin 1s linear infinite' : 'none' }} />
             </button>
           )}
 
+          {/* ── Bouton Rapport Journalier ── */}
+          {mounted && (
+            <button
+              onClick={handleDailyReport}
+              disabled={isGeneratingReport}
+              title="Générer le rapport journalier PDF"
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '6px',
+                padding: '0 14px',
+                height: '36px',
+                borderRadius: '8px',
+                border: 'none',
+                background: isGeneratingReport
+                  ? (isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.06)')
+                  : 'linear-gradient(135deg,#0055cc,#0082f0)',
+                color: isGeneratingReport ? (isDark ? '#5a7a99' : '#94a3b8') : '#ffffff',
+                fontSize: '12px',
+                fontWeight: 600,
+                cursor: isGeneratingReport ? 'not-allowed' : 'pointer',
+                transition: 'all 0.2s ease',
+                whiteSpace: 'nowrap',
+                boxShadow: isGeneratingReport ? 'none' : '0 2px 8px rgba(0,82,240,0.3)',
+              }}
+            >
+              <FileDown size={14} style={{ animation: isGeneratingReport ? 'spin 1s linear infinite' : 'none', flexShrink: 0 }} />
+              {isGeneratingReport
+                ? (t('topbar', 'generating') ?? 'Génération…')
+                : (t('topbar', 'dailyReport') ?? 'Rapport journalier')}
+            </button>
+          )}
+
+          {/* ── Avatar / dropdown profil ── */}
           {mounted && (
             <div data-profile-dropdown style={{ position: 'relative' }}>
               <button onClick={() => setDropOpen(p => !p)} style={{ display: 'flex', alignItems: 'center', gap: '7px', padding: '4px 10px 4px 4px', borderRadius: '10px', background: dropOpen ? (isDark ? 'rgba(0,130,240,0.18)' : 'rgba(0,130,240,0.1)') : (isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,130,240,0.06)'), border: `1px solid ${dropOpen ? 'rgba(0,130,240,0.45)' : 'rgba(0,130,240,0.2)'}`, cursor: 'pointer', transition: 'all 0.18s' }}>

@@ -9,7 +9,7 @@ import { useLang } from '@/lib/language-context'
 import {
   RefreshCw, AlertTriangle, CheckCircle2, AlertCircle,
   Activity, Zap, GitBranch, ChevronRight, Server,
-  TrendingUp, Shield, Radio, BarChart2, Clock, ArrowRight
+  TrendingUp, Shield, Radio, BarChart2, Clock, ArrowRight,
 } from 'lucide-react'
 
 interface NodeStatus {
@@ -18,8 +18,8 @@ interface NodeStatus {
   role?: string
   hw?: {
     cpu_pct?: number
-    ram_pct?: number       // ← nom réel dans l'API
-    memory_pct?: number    // ← alias normalisé
+    ram_pct?: number
+    memory_pct?: number
     disk_pct?: number
     status?: string
     [key: string]: unknown
@@ -41,7 +41,6 @@ function getCookie(name: string): string {
   return m ? decodeURIComponent(m[2]) : ''
 }
 
-// ── Helpers pour lire CPU et RAM depuis n'importe quel format API ──
 function getCpu(hw: any): number {
   return hw?.cpu_pct ?? hw?.cpu ?? 0
 }
@@ -137,13 +136,14 @@ const ROLE_STYLE: Record<string, { bg: string; text: string }> = {
 // Dashboard Page
 // ─────────────────────────────────────────────────────────────
 export default function DashboardPage() {
-  const [summary,      setSummary]      = useState<Summary | null>(null)
-  const [statuses,     setStatuses]     = useState<Record<string, NodeStatus>>({})
-  const [anomalies,    setAnomalies]    = useState<Anomaly[]>([])
-  const [correlation,  setCorrelation]  = useState<Correlation | null>(null)
-  const [isLoading,    setIsLoading]    = useState(true)
+  const [summary,     setSummary]     = useState<Summary | null>(null)
+  const [statuses,    setStatuses]    = useState<Record<string, NodeStatus>>({})
+  const [anomalies,   setAnomalies]   = useState<Anomaly[]>([])
+  const [correlation, setCorrelation] = useState<Correlation | null>(null)
+  const [isLoading,   setIsLoading]   = useState(true)
   const [isRefreshing, setIsRefreshing] = useState(false)
-  const [lastUpdate,   setLastUpdate]   = useState<Date | null>(null)
+  const [lastUpdate,  setLastUpdate]  = useState<Date | null>(null)
+
   const router = useRouter()
   const { t }  = useLang()
   const c      = useThemeColors()
@@ -178,8 +178,6 @@ export default function DashboardPage() {
         ? rawStatus.nodes
         : Object.fromEntries(Object.entries(rawStatus).filter(([k]) => !SKIP_KEYS.includes(k)))
 
-      // Normaliser chaque nœud — on garde le hw ORIGINAL intact
-      // pour que getCpu() et getRam() accèdent aux vrais noms de champs
       const normalized: Record<string, NodeStatus> = {}
       for (const [name, raw] of Object.entries(rawNodes)) {
         const n = raw as any
@@ -188,8 +186,7 @@ export default function DashboardPage() {
           status:       n.status ?? n.global_status ?? 'UNKNOWN',
           display_name: n.display_name ?? name,
           role:         n.role ?? '—',
-          // On conserve hw tel quel — getCpu/getRam gèrent tous les formats
-          hw: n.hw ?? {},
+          hw:           n.hw ?? {},
         }
       }
       setStatuses(normalized)
@@ -231,7 +228,12 @@ export default function DashboardPage() {
   const rowHover = c.rowHover ?? panelBg
 
   if (isLoading) return (
-    <DashboardLayout><Topbar />
+    <DashboardLayout>
+      <Topbar
+        onRefresh={() => fetchAll(true)}
+        isRefreshing={isRefreshing}
+        lastUpdate={lastUpdate?.toISOString()}
+      />
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: 'calc(100vh - 64px)' }}>
         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '16px' }}>
           <div style={{ position: 'relative', width: '48px', height: '48px' }}>
@@ -246,7 +248,11 @@ export default function DashboardPage() {
 
   return (
     <DashboardLayout>
-      <Topbar />
+      <Topbar
+        onRefresh={() => fetchAll(true)}
+        isRefreshing={isRefreshing}
+        lastUpdate={lastUpdate?.toISOString()}
+      />
       <div style={{ padding: '20px 24px', display: 'flex', flexDirection: 'column', gap: '16px' }}>
 
         {/* ══ EN-TÊTE ══ */}
@@ -276,14 +282,6 @@ export default function DashboardPage() {
                 <span>Mis à jour {lastUpdate.toLocaleTimeString('fr-FR')}</span>
               </div>
             )}
-            <button onClick={() => fetchAll(true)} disabled={isRefreshing} style={{
-              display: 'flex', alignItems: 'center', gap: '6px', padding: '7px 14px', borderRadius: '8px',
-              background: c.cardBg, border: `1px solid ${c.border}`, color: c.textPrimary,
-              fontSize: '12px', fontWeight: 600, cursor: 'pointer', opacity: isRefreshing ? 0.6 : 1
-            }}>
-              <RefreshCw size={13} style={{ animation: isRefreshing ? 'ttcs-spin 0.8s linear infinite' : 'none' }}/>
-              Actualiser
-            </button>
           </div>
         </div>
 
@@ -377,7 +375,6 @@ export default function DashboardPage() {
               : nodes.map(([name, node]) => {
                   const s   = node.status ?? 'UNKNOWN'
                   const rs  = ROLE_STYLE[node.role ?? ''] ?? ROLE_STYLE['CCN']
-                  // ✅ Utilise getCpu/getRam qui gèrent tous les noms de champs
                   const cpu = getCpu(node.hw)
                   const mem = getRam(node.hw)
                   const sc  = s === 'CRITICAL' ? '#ef4444' : s === 'WARNING' ? '#f59e0b' : s === 'NORMAL' ? '#22c55e' : '#9ca3af'
@@ -569,8 +566,8 @@ export default function DashboardPage() {
               </div>
               <div style={{ padding: '12px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
                 {[
-                  { label: 'CAUSE PROBABLE',   value: correlation?.probable_cause ?? 'Aucune corrélation détectée', icon: Zap,       color: '#f59e0b' },
-                  { label: "CHAÎNE D'IMPACT",  value: correlation?.impact_chain   ?? "Aucune chaîne d'impact",     icon: GitBranch, color: accent    },
+                  { label: 'CAUSE PROBABLE',  value: correlation?.probable_cause ?? 'Aucune corrélation détectée', icon: Zap,       color: '#f59e0b' },
+                  { label: "CHAÎNE D'IMPACT", value: correlation?.impact_chain   ?? "Aucune chaîne d'impact",     icon: GitBranch, color: accent    },
                 ].map(({ label, value, icon: Icon, color }) => (
                   <div key={label} style={{ padding: '10px 12px', background: panelBg,
                     borderRadius: '9px', border: `1px solid ${c.border}` }}>

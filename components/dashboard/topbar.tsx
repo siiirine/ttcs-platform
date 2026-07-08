@@ -185,7 +185,7 @@ export function Topbar({ onRefresh, isRefreshing, lastUpdate }: TopbarProps) {
               <FileDown size={14} style={{ animation: isGeneratingReport ? 'spin 1s linear infinite' : 'none', flexShrink: 0 }} />
               {isGeneratingReport
                 ? (t('topbar', 'generating') ?? 'Génération…')
-                : (t('topbar', 'dailyReport') ?? 'Rapport journalier')}
+                : (t('topbar', 'Générer un rapport') ?? 'Rapport journalier')}
             </button>
           )}
 

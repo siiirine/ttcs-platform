@@ -9,7 +9,7 @@ import {
   User, Mail, Shield, Calendar, Clock, Camera, KeyRound,
   Save, Eye, EyeOff, CheckCircle, AlertCircle, Pencil, X,
   ChevronDown, ChevronUp, Activity, Bell, Globe,
-  Sun, Moon, AlertTriangle, LogIn,
+  AlertTriangle, LogIn,
   Lock, Trash2, BadgeCheck, Settings,
 } from 'lucide-react'
 
@@ -37,6 +37,7 @@ interface UserProfile {
   created_at: string
   last_login: string | null
   expires_at: string | null
+  twofa_enabled?: boolean
 }
 
 interface HistoryEntry { created_at: string; question: string }
@@ -78,14 +79,12 @@ function Toggle({ checked, onChange }: { checked: boolean; onChange: (v: boolean
 export default function ProfilPage() {
   const isDark = useIsDark()
   const router = useRouter()
-  const { setTheme } = useTheme()
   const { lang, setLang, t } = useLang()
 
   const card    = isDark ? 'rgba(15,24,40,0.95)' : 'white'
   const border  = isDark ? 'rgba(0,130,240,0.15)' : 'rgba(0,130,240,0.12)'
   const title   = isDark ? '#e8f4ff' : '#0a1628'
   const sub     = isDark ? '#6a8aaa' : '#6b7280'
-  const text2   = isDark ? '#8899aa' : '#4a6a8a'
   const inputBg = isDark ? '#131c2e' : '#f8faff'
   const inputBd = isDark ? 'rgba(0,130,240,0.2)' : 'rgba(0,130,240,0.2)'
   const inputCl = isDark ? '#e8f4ff' : '#0a1628'
@@ -127,6 +126,10 @@ export default function ProfilPage() {
   const [notifInternal, setNotifInternal] = useState(true)
   const [dangerConfirm, setDangerConfirm] = useState(false)
 
+  // ── 2FA states ───────────────────────────────────────────────
+  const [twoFaEnabled, setTwoFaEnabled]   = useState(false)
+  const [twoFaLoading, setTwoFaLoading]   = useState(false)
+
   const fetchProfile = async () => {
     try {
       const token = getCookie('ttcs_token')
@@ -136,6 +139,7 @@ export default function ProfilPage() {
       const data: UserProfile = await res.json()
       setProfile(data)
       setInfoForm({ full_name: data.full_name || '', email: data.email || '' })
+      setTwoFaEnabled(data.twofa_enabled || false)
       const saved = localStorage.getItem(`avatar_${data.username}`)
       if (saved) { setAvatar(saved); setAvatarOrig(saved) }
     } catch { router.push('/login') }
@@ -215,6 +219,36 @@ export default function ProfilPage() {
     finally { setSavingPwd(false) }
   }
 
+  // ── Toggle 2FA ───────────────────────────────────────────────
+  const handleToggle2FA = async (enabled: boolean) => {
+    if (!profile?.email) {
+      showToast('Configurez un email avant d\'activer le 2FA', false)
+      return
+    }
+    setTwoFaLoading(true)
+    try {
+      const token = getCookie('ttcs_token')
+      const res = await fetch(`${BASE_URL}/auth/toggle-2fa`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ enabled }),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.detail || 'Erreur')
+      setTwoFaEnabled(enabled)
+      showToast(
+        enabled
+          ? `2FA activé ! Code de test envoyé à ${profile.email}`
+          : '2FA désactivé',
+        true
+      )
+    } catch (e) {
+      showToast(e instanceof Error ? e.message : 'Erreur 2FA', false)
+    } finally {
+      setTwoFaLoading(false)
+    }
+  }
+
   const getRoleLabel = (r: string) => r === 'admin' ? t('profile', 'admin') : t('profile', 'operator')
   const getRoleColor = (r: string) => r === 'admin' ? '#ef4444' : '#0082f0'
   const getRoleBg    = (r: string) => r === 'admin' ? 'rgba(239,68,68,0.12)' : 'rgba(0,130,240,0.1)'
@@ -282,6 +316,7 @@ export default function ProfilPage() {
         .pcard-hover:hover { transform: translateY(-1px); box-shadow: 0 4px 20px rgba(0,130,240,0.12) !important; }
         .pcard-hover { transition: transform 0.2s, box-shadow 0.2s; }
         .danger-btn:hover { opacity: 0.85; }
+        @keyframes spin { to { transform: rotate(360deg); } }
       `}</style>
 
       <div style={{ padding: '24px 28px', maxWidth: '1200px' }}>
@@ -353,10 +388,10 @@ export default function ProfilPage() {
                 <>
                   <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '16px' }}>
                     {[
-                      { icon: <User size={12} />, label: t('profile', 'fullName'),       value: profile.full_name || '—' },
-                      { icon: <Mail size={12} />, label: t('profile', 'email'),           value: profile.email || '—' },
-                      { icon: <Calendar size={12} />, label: t('profile', 'memberSince'), value: fmtDate(profile.created_at) },
-                      { icon: <Clock size={12} />, label: t('profile', 'lastConnection'), value: fmtDate(profile.last_login) },
+                      { icon: <User size={12} />,     label: t('profile', 'fullName'),      value: profile.full_name || '—' },
+                      { icon: <Mail size={12} />,     label: t('profile', 'email'),          value: profile.email || '—' },
+                      { icon: <Calendar size={12} />, label: t('profile', 'memberSince'),    value: fmtDate(profile.created_at) },
+                      { icon: <Clock size={12} />,    label: t('profile', 'lastConnection'), value: fmtDate(profile.last_login) },
                     ].map(f => (
                       <div key={f.label} style={{ padding: '12px 14px', borderRadius: '10px', background: isDark ? 'rgba(255,255,255,0.03)' : 'rgba(0,130,240,0.04)', border: `1px solid ${border}` }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '5px', color: sub, fontSize: '10px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: '5px' }}>{f.icon}{f.label}</div>
@@ -425,12 +460,16 @@ export default function ProfilPage() {
               <div style={{ padding: '12px 14px', borderRadius: '10px', background: isDark ? 'rgba(245,158,11,0.08)' : 'rgba(245,158,11,0.05)', border: '1px solid rgba(245,158,11,0.2)', marginBottom: '16px' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
                   <span style={{ fontSize: '12px', fontWeight: 600, color: title }}>{t('profile', 'securityLevel')}</span>
-                  <span style={{ fontSize: '12px', fontWeight: 700, color: '#f59e0b' }}>{t('profile', 'medium')}</span>
+                  <span style={{ fontSize: '12px', fontWeight: 700, color: twoFaEnabled ? '#16a34a' : '#f59e0b' }}>
+                    {twoFaEnabled ? 'Élevé' : t('profile', 'medium')}
+                  </span>
                 </div>
                 <div style={{ height: '6px', borderRadius: '99px', background: isDark ? 'rgba(255,255,255,0.08)' : '#e5e7eb', overflow: 'hidden' }}>
-                  <div style={{ height: '100%', width: '60%', background: 'linear-gradient(90deg, #f59e0b, #fbbf24)', borderRadius: '99px' }} />
+                  <div style={{ height: '100%', width: twoFaEnabled ? '90%' : '60%', background: twoFaEnabled ? 'linear-gradient(90deg, #16a34a, #22c55e)' : 'linear-gradient(90deg, #f59e0b, #fbbf24)', borderRadius: '99px', transition: 'all 0.4s' }} />
                 </div>
-                <div style={{ fontSize: '11px', color: sub, marginTop: '5px' }}>{t('profile', 'enable2FA')}</div>
+                <div style={{ fontSize: '11px', color: sub, marginTop: '5px' }}>
+                  {twoFaEnabled ? '✅ 2FA actif — sécurité renforcée' : t('profile', 'enable2FA')}
+                </div>
               </div>
 
               <button onClick={() => { setShowPwd(p => !p); setPwdErr(''); setPwdOk(false); setPwdForm({ new_password: '', confirm: '' }) }}
@@ -478,15 +517,29 @@ export default function ProfilPage() {
                 </div>
               )}
 
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 14px', borderRadius: '10px', border: `1px solid ${border}` }}>
+              {/* ── Auth. 2 facteurs — FONCTIONNEL ── */}
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 14px', borderRadius: '10px', border: `1px solid ${twoFaEnabled ? 'rgba(16,185,129,0.3)' : border}`, background: twoFaEnabled ? (isDark ? 'rgba(16,185,129,0.08)' : 'rgba(16,185,129,0.04)') : 'transparent', transition: 'all 0.3s' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                  <Shield size={14} color="#10b981" />
+                  <Shield size={14} color={twoFaEnabled ? '#10b981' : '#6b7280'} />
                   <div>
-                    <div style={{ fontSize: '13px', fontWeight: 600, color: title }}>{t('profile', 'twoFactor')}</div>
-                    <div style={{ fontSize: '11px', color: sub }}>{t('profile', 'twoFactorSub')}</div>
+                    <div style={{ fontSize: '13px', fontWeight: 600, color: title }}>
+                      {t('profile', 'twoFactor')}
+                    </div>
+                    <div style={{ fontSize: '11px', color: sub }}>
+                      {twoFaEnabled
+                        ? `✅ Actif — code envoyé à ${profile?.email}`
+                        : profile?.email
+                        ? t('profile', 'twoFactorSub')
+                        : '⚠️ Ajoutez un email pour activer le 2FA'}
+                    </div>
                   </div>
                 </div>
-                <Toggle checked={false} onChange={() => showToast(t('profile', 'twoFactorSoon'), false)} />
+                {twoFaLoading
+                  ? <div style={{ width: '42px', height: '24px', borderRadius: '12px', background: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.06)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                      <div style={{ width: '12px', height: '12px', borderRadius: '50%', border: '2px solid #0082f0', borderTopColor: 'transparent', animation: 'spin 0.8s linear infinite' }} />
+                    </div>
+                  : <Toggle checked={twoFaEnabled} onChange={handleToggle2FA} />
+                }
               </div>
             </div>
           </div>
@@ -496,20 +549,6 @@ export default function ProfilPage() {
             {sectionHeader(t('profile', 'preferences'), <Settings size={14} color="#00d4aa" />, '#00d4aa')}
             <div style={{ padding: '20px' }}>
               <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-
-                {/* Thème */}
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 14px', borderRadius: '10px', border: `1px solid ${border}` }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                    {isDark ? <Moon size={14} color="#a855f7" /> : <Sun size={14} color="#f59e0b" />}
-                    <div>
-                      <div style={{ fontSize: '13px', fontWeight: 600, color: title }}>{t('profile', 'darkMode')}</div>
-                      <div style={{ fontSize: '11px', color: sub }}>{isDark ? t('profile', 'darkOn') : t('profile', 'darkOff')}</div>
-                    </div>
-                  </div>
-                  <Toggle checked={isDark} onChange={v => setTheme(v ? 'dark' : 'light')} />
-                </div>
-
-                {/* ✅ Langue — toggle FR/EN fonctionnel */}
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 14px', borderRadius: '10px', border: `1px solid ${border}` }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                     <Globe size={14} color="#0082f0" />
@@ -532,7 +571,6 @@ export default function ProfilPage() {
                   </div>
                 </div>
 
-                {/* Notifications */}
                 <div style={{ padding: '12px 14px', borderRadius: '10px', border: `1px solid ${border}` }}>
                   <div style={{ fontSize: '11px', fontWeight: 700, color: sub, textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: '10px' }}>{t('profile', 'notifications')}</div>
                   {[

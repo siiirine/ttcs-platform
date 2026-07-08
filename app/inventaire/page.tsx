@@ -354,13 +354,17 @@ function ChargingMapSVG({ statuses, isDark }: { statuses: Record<string, NodeSta
               fill={txtSec} style={{ fontFamily:'inherit', fontSize:'8px' }}>
               {n.proto}
             </text>
-            {/* Statut texte */}
-            <text x={n.x + n.w/2} y={n.y + 62} textAnchor="middle"
-              fill={sc} style={{ fontFamily:'inherit', fontSize:'8.5px', fontWeight:700 }}>
-              {s}
-            </text>
-            {/* Dot statut */}
-            <circle cx={n.x + n.w - 10} cy={n.y + 10} r={5} fill={sc} className={dotCls}/>
+            {/* Statut texte — masqué si UNKNOWN */}
+            {s !== 'UNKNOWN' && (
+              <text x={n.x + n.w/2} y={n.y + 62} textAnchor="middle"
+                fill={sc} style={{ fontFamily:'inherit', fontSize:'8.5px', fontWeight:700 }}>
+                {s}
+              </text>
+            )}
+            {/* Dot statut — masqué si UNKNOWN */}
+            {s !== 'UNKNOWN' && (
+              <circle cx={n.x + n.w - 10} cy={n.y + 10} r={5} fill={sc} className={dotCls}/>
+            )}
           </g>
         )
       })}
